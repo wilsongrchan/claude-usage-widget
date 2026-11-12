@@ -122,6 +122,10 @@ Requires the Xcode Command Line Tools (`xcode-select --install`).
 ./build.sh dist       # universal build + zip with install guide in ./dist
 ```
 
+## License
+
+[MIT](LICENSE): free to use, modify and share, with no warranty.
+
 ## Disclaimer
 
 Usage figures come from an undocumented Anthropic endpoint that may change or stop working at any time; forecasts are estimates. Check **Settings → Usage** on claude.ai for official figures.

@@ -272,6 +272,7 @@ struct AppearancePanel: View {
     var onSizeChange: (Bool) -> Void
 
     @AppStorage("theme") var theme = 0
+    @AppStorage("widgetStyle") var widgetStyle = 0
     @AppStorage("compact") var compact = false
     @AppStorage("showPaceMarker") var showPaceMarker = true
     @AppStorage("segmentedRings") var segmentedRings = true
@@ -312,6 +313,10 @@ struct AppearancePanel: View {
                      active: true, glyph: AnyView(Image(systemName: themeIcons[theme])),
                      action: { theme = (theme + 1) % 3 }),
         ]
+        let styleNames = ["Automatic", "Full color", "Monochrome"], styleIcons = ["wand.and.sparkles", "paintpalette.fill", "circle.dotted.circle"]
+        t.append(TileSpec(id: "style", help: "Widget style: \(styleNames[widgetStyle]). Tap for \(styleNames[(widgetStyle + 1) % 3]).",
+                          active: true, glyph: AnyView(Image(systemName: styleIcons[widgetStyle])),
+                          action: { widgetStyle = (widgetStyle + 1) % 3 }))
         if allowSize {
             t.append(TileSpec(id: "size", help: "Size: small. Tap for the large 2×2 widget.",
                               glyph: AnyView(Image(systemName: "arrow.up.left.and.arrow.down.right")),
@@ -342,6 +347,13 @@ struct AppearancePanel: View {
                 VStack(alignment: .leading, spacing: 10) {
                     LabeledPicker(title: "Theme", selection: $theme,
                                   options: [("Auto", 0), ("Light", 1), ("Dark", 2)])
+                    LabeledPicker(title: "Widget style", selection: $widgetStyle,
+                                  options: [("Automatic", 0), ("Full color", 1), ("Monochrome", 2)])
+                    Text(widgetStyle == 0 ? "Fades like desktop widgets while you're in an app; full color when you click the desktop."
+                         : widgetStyle == 1 ? "Always full color." : "Always translucent and monochrome.")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                     if allowSize {
                         LabeledPicker(title: "Size", selection: Binding(
                             get: { compact }, set: { compact = $0; onSizeChange($0) }),

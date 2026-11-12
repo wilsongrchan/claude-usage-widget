@@ -65,6 +65,8 @@ final class UsageStore: ObservableObject {
     @Published var lastUpdated: Date?
     @Published var now = Date()
     @Published var loading = false
+    /// True when the desktop isn't focused: the widget fades like native widgets.
+    @Published var dimmed = false
     /// Soft status (rate limited / offline) shown in grey while the last good data stays on screen.
     @Published var pausedReason: String?
     @Published var nextRetry: Date?
@@ -181,6 +183,17 @@ final class UsageStore: ObservableObject {
             throw WidgetError.rateLimited(retryAfter: retry)
         default: throw WidgetError.msg("Usage API returned HTTP \(code)")
         }
+    }
+}
+
+// MARK: - Faded (monochrome) state
+
+private struct WidgetDimmedKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    /// True while the widget is in its faded, native-widget style; small text switches to near-white.
+    var widgetDimmed: Bool {
+        get { self[WidgetDimmedKey.self] }
+        set { self[WidgetDimmedKey.self] = newValue }
     }
 }
 
@@ -359,6 +372,7 @@ struct PaceNote: View {
     let percent: Double
     let elapsed: Double?
     var short = false
+    @Environment(\.widgetDimmed) private var dimmed
 
     var body: some View {
         if let elapsed {
@@ -371,7 +385,7 @@ struct PaceNote: View {
             Label(text, systemImage: icon)
                 .font(.system(size: short ? 10 : 11, weight: .semibold))
                 .monospacedDigit()
-                .foregroundStyle(color)
+                .foregroundStyle(dimmed ? Color.white.opacity(0.95) : color)
                 .lineLimit(1)
                 .help("Ahead of pace means you're using this limit faster than time is passing, and may hit it before it resets.")
         }
@@ -669,6 +683,7 @@ struct WidgetView: View {
     /// Used by the menu bar popover, which always shows the large layout.
     var forceLarge = false
     var compact: Bool { !forceLarge && compactSetting }
+    var dimmedNow: Bool { store.dimmed && !forceLarge && stack.isEmpty }
     var onLevelChange: (Bool) -> Void
     var onSizeChange: (Bool) -> Void
 
@@ -705,6 +720,14 @@ struct WidgetView: View {
             }
         }
         .onHover { h in withAnimation(.easeOut(duration: 0.15)) { hovering = h } }
+        // Like native desktop widgets: when you're working in an app, fade to a translucent
+        // monochrome look; full colour returns when you click the desktop.
+        .environment(\.widgetDimmed, dimmedNow)
+        .compositingGroup()
+        .saturation(dimmedNow ? 0 : 1)
+        .brightness(dimmedNow ? 0.32 : 0)
+        .opacity(dimmedNow ? 0.92 : 1)
+        .animation(.easeInOut(duration: 0.35), value: dimmedNow)
     }
 
     @ViewBuilder
@@ -843,7 +866,7 @@ struct WidgetView: View {
             }
             .font(.system(size: 10, weight: .medium))
             .monospacedDigit()
-            .foregroundStyle(.secondary)
+            .foregroundStyle(dimmedNow ? AnyShapeStyle(Color.white.opacity(0.85)) : AnyShapeStyle(.secondary))
             .help(resetText(sReset, now: store.now).capitalized(with: nil) + " (5-hour session)")
         }
         .font(.system(size: 10))
@@ -951,12 +974,19 @@ struct RefreshButton: View {
     }
 }
 
-extension Text {
-    func caption() -> some View {
-        self.font(.system(size: 11, weight: .medium))
+/// Secondary caption that turns near-white when the widget is faded.
+struct CaptionStyle: ViewModifier {
+    @Environment(\.widgetDimmed) private var dimmed
+    func body(content: Content) -> some View {
+        content
+            .font(.system(size: 11, weight: .medium))
             .monospacedDigit()
-            .foregroundStyle(.secondary)
+            .foregroundStyle(dimmed ? AnyShapeStyle(Color.white.opacity(0.85)) : AnyShapeStyle(.secondary))
     }
+}
+
+extension Text {
+    func caption() -> some View { modifier(CaptionStyle()) }
 }
 
 // MARK: - macOS desktop widget grid
@@ -1096,6 +1126,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     var window: WidgetWindow!
     var menuBar: MenuBarController?
     private var themeCache: Int?
+    private var dimCache: Bool?
+    static let glassTint = NSColor(red: 0.85, green: 0.47, blue: 0.34, alpha: 0.10)   // faint Claude-orange tint
+
+    /// Widget style, mirroring macOS: 0 = Automatic (fade unless the desktop is focused),
+    /// 1 = always full colour, 2 = always monochrome.
+    func updateFocus() {
+        let style = UserDefaults.standard.integer(forKey: "widgetStyle")
+        let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let desktopFocused = front == "com.apple.finder" || front == Bundle.main.bundleIdentifier
+        let dim = style == 2 || (style == 0 && !desktopFocused)
+        guard dim != dimCache, glass != nil else { return }
+        dimCache = dim
+        MainActor.assumeIsolated { store.dimmed = dim }
+        glass.style = dim ? .clear : .regular
+        glass.tintColor = dim ? nil : Self.glassTint
+        window.appearance = dim ? NSAppearance(named: .darkAqua) : nil   // white text, like native dimmed widgets
+    }
 
     /// Auto / Light / Dark — applied app-wide so the widget and menu bar popover match.
     func applyTheme() {
@@ -1115,6 +1162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification,
                                                object: nil, queue: .main) { [weak self] _ in
             self?.applyTheme()
+            self?.updateFocus()
         }
         let root = WidgetView(store: store,
                               onLevelChange: { [weak self] onTop in self?.applyLevel(onTop) },
@@ -1128,7 +1176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         glass = NSGlassEffectView(frame: NSRect(x: Grid.inset, y: Grid.inset, width: size, height: size))
         glass.style = .regular
         glass.cornerRadius = 24
-        glass.tintColor = NSColor(red: 0.85, green: 0.47, blue: 0.34, alpha: 0.10)  // faint Claude-orange tint
+        glass.tintColor = Self.glassTint
         glass.contentView = hosting
 
         let container = NSView(frame: NSRect(x: 0, y: 0, width: Grid.outerSize(span), height: Grid.outerSize(span)))
@@ -1154,6 +1202,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         snap(animated: false)
         window.onDragEnd = { [weak self] in self?.snap(animated: true) }
         window.orderFrontRegardless()
+
+        // Fade/unfade as the user moves between apps and the desktop, like native widgets.
+        updateFocus()
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification,
+                                                          object: nil, queue: .main) { [weak self] _ in
+            self?.updateFocus()
+        }
 
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification,
                                                object: nil, queue: .main) { [weak self] _ in

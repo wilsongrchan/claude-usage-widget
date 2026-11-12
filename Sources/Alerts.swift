@@ -134,6 +134,7 @@ struct ForecastNote: View {
     let hit: Date?
     let now: Date
     var short = false
+    @Environment(\.widgetDimmed) private var dimmed
 
     var body: some View {
         if let hit {
@@ -144,7 +145,7 @@ struct ForecastNote: View {
                   systemImage: "hourglass")
                 .font(.system(size: short ? 10 : 11, weight: .semibold))
                 .monospacedDigit()
-                .foregroundStyle(Palette.rust)
+                .foregroundStyle(dimmed ? Color.white.opacity(0.95) : Palette.rust)
                 .lineLimit(1)
                 .help("At your current rate you'll hit this limit before it resets.")
         }

@@ -1,0 +1,4 @@
+# Build output (regenerate with ./build.sh or ./build.sh dist)
+build/
+dist/
+.DS_Store

@@ -134,10 +134,18 @@ struct ForecastNote: View {
     let hit: Date?
     let now: Date
     var short = false
+    var stacked = false
     @Environment(\.widgetDimmed) private var dimmed
 
     var body: some View {
-        if let hit {
+        if stacked, let hit {
+            let sameDay = Calendar.current.isDate(hit, inSameDayAs: now)
+            let time = sameDay ? hit.formatted(.dateTime.hour().minute())
+                               : hit.formatted(.dateTime.weekday(.abbreviated).hour())
+            StackedNote(top: hit <= now ? "Limit" : "~\(time)", bottom: hit <= now ? "reached" : "runs out",
+                        icon: "hourglass", color: dimmed ? Color.white.opacity(0.95) : Palette.rust)
+                .help("At your current rate you'll hit this limit before it resets.")
+        } else if let hit {
             let sameDay = Calendar.current.isDate(hit, inSameDayAs: now)
             let time = sameDay ? hit.formatted(.dateTime.hour().minute())
                                : hit.formatted(.dateTime.weekday(.abbreviated).hour())

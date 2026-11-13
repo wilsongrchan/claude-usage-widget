@@ -198,6 +198,8 @@ struct SettingsPanel: View {
     @ObservedObject var store: UsageStore
     let nav: Nav
     let compact: Bool
+    /// Icon-only tab bar (small and medium widgets, which are short).
+    var iconTabs: Bool? = nil
     let allowSize: Bool
     var onLevelChange: (Bool) -> Void
     var onSizeChange: (Bool) -> Void
@@ -209,6 +211,7 @@ struct SettingsPanel: View {
     ]
 
     var body: some View {
+        let compact = iconTabs ?? self.compact
         VStack(alignment: .leading, spacing: 8) {
             // Preferences-style toolbar: icon above label, selected item highlighted.
             VStack(spacing: 6) {
@@ -253,11 +256,11 @@ struct SettingsPanel: View {
             }
 
             switch tab {
-            case 1: AlertsPanel(nav: nav, compact: compact, showHeader: false)
-            case 2: DataPanel(store: store, nav: nav, compact: compact, showHeader: false)
-            case 3: AboutPanel(nav: nav, compact: compact, showHeader: false, store: store)
+            case 1: AlertsPanel(nav: nav, compact: self.compact, showHeader: false)
+            case 2: DataPanel(store: store, nav: nav, compact: self.compact, showHeader: false)
+            case 3: AboutPanel(nav: nav, compact: self.compact, showHeader: false, store: store)
             default: AppearancePanel(nav: nav, allowSize: allowSize, onLevelChange: onLevelChange,
-                                     onSizeChange: onSizeChange, small: compact, showHeader: false)
+                                     onSizeChange: onSizeChange, small: self.compact, showHeader: false)
             }
         }
     }
@@ -273,7 +276,9 @@ struct AppearancePanel: View {
 
     @AppStorage("theme") var theme = 0
     @AppStorage("widgetStyle") var widgetStyle = 0
-    @AppStorage("compact") var compact = false
+    @AppStorage(WidgetSize.key) var sizeRaw = WidgetSize.current.rawValue
+    @AppStorage("shrinkDown") var shrinkDown = false     // large ↔ medium: keep the bottom edge
+    @AppStorage("shrinkRight") var shrinkRight = false   // medium ↔ small: keep the right edge
     @AppStorage("showPaceMarker") var showPaceMarker = true
     @AppStorage("segmentedRings") var segmentedRings = true
     @AppStorage("weeklySplit") var weeklySplit = 0
@@ -318,9 +323,19 @@ struct AppearancePanel: View {
                           active: true, glyph: AnyView(Image(systemName: styleIcons[widgetStyle])),
                           action: { widgetStyle = (widgetStyle + 1) % 3 }))
         if allowSize {
-            t.append(TileSpec(id: "size", help: "Size: small. Tap for the large 2×2 widget.",
-                              glyph: AnyView(Image(systemName: "arrow.up.left.and.arrow.down.right")),
-                              action: { compact = false; onSizeChange(false) }))
+            for target in [WidgetSize.medium, .large] {
+                t.append(TileSpec(id: "size\(target.rawValue)", help: "Switch to the \(target.name.lowercased()) widget.",
+                                  glyph: AnyView(SizeGlyph(size: target)),
+                                  action: { WidgetSize.noteChange(from: sizeRaw, to: target.rawValue)
+                                            withAnimation(WidgetSize.changeAnimation) { sizeRaw = target.rawValue }
+                                            onSizeChange(true) }))
+            }
+            t.append(TileSpec(id: "shrinkV", help: "Large → medium shrinks \(shrinkDown ? "down" : "up"). Tap to switch.",
+                              active: true, glyph: AnyView(ShrinkGlyph(vertical: true, toEnd: shrinkDown, scale: 0.8)),
+                              action: { shrinkDown.toggle() }))
+            t.append(TileSpec(id: "shrinkH", help: "Medium → small shrinks \(shrinkRight ? "right" : "left"). Tap to switch.",
+                              active: true, glyph: AnyView(ShrinkGlyph(vertical: false, toEnd: shrinkRight, scale: 0.8)),
+                              action: { shrinkRight.toggle() }))
         }
         t += [
             TileSpec(id: "pace", help: "Pace marker: \(onOff(showPaceMarker)). White tick showing where you should be by now.",
@@ -329,7 +344,7 @@ struct AppearancePanel: View {
                      active: segmentedRings, glyph: AnyView(SegmentGlyph()), action: { segmentedRings.toggle() }),
             TileSpec(id: "split", help: "Weekly ring slices: \(splitNames[weeklySplit]). Tap for \(splitNames[(weeklySplit + 1) % 3]).",
                      active: true, glyph: splitGlyphs[weeklySplit], action: { weeklySplit = (weeklySplit + 1) % 3 }),
-            TileSpec(id: "fable", help: "Fable usage bar: \(onOff(showScoped)). Shown in the large widget.",
+            TileSpec(id: "fable", help: "Fable usage bar: \(onOff(showScoped)). Shown in the medium and large widgets.",
                      active: showScoped, glyph: AnyView(Image(systemName: "chart.bar.fill")), action: { showScoped.toggle() }),
             TileSpec(id: "menubar", help: "Menu bar gauge: \(onOff(menuBar)).",
                      active: menuBar, glyph: AnyView(Image(systemName: "menubar.rectangle")), action: { menuBar.toggle() }),
@@ -356,8 +371,31 @@ struct AppearancePanel: View {
                         .fixedSize(horizontal: false, vertical: true)
                     if allowSize {
                         LabeledPicker(title: "Size", selection: Binding(
-                            get: { compact }, set: { compact = $0; onSizeChange($0) }),
-                                      options: [("Small", true), ("Large", false)])
+                            get: { sizeRaw }, set: { v in
+                                WidgetSize.noteChange(from: sizeRaw, to: v)
+                                withAnimation(WidgetSize.changeAnimation) { sizeRaw = v }
+                                onSizeChange(true) }),
+                                      options: WidgetSize.allCases.map { ($0.name, $0.rawValue) })
+                        // Which way it shrinks (growing goes back the same way).
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Resize direction").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+                            HStack(alignment: .top, spacing: 18) {
+                                VStack(spacing: 3) {
+                                    IconChoice(selection: $shrinkDown, options: [
+                                        (false, "Large → medium shrinks up", AnyView(ShrinkGlyph(vertical: true, toEnd: false))),
+                                        (true, "Large → medium shrinks down", AnyView(ShrinkGlyph(vertical: true, toEnd: true))),
+                                    ])
+                                    Text("Large ↔ medium").font(.system(size: 9)).foregroundStyle(.tertiary)
+                                }
+                                VStack(spacing: 3) {
+                                    IconChoice(selection: $shrinkRight, options: [
+                                        (false, "Medium → small shrinks left", AnyView(ShrinkGlyph(vertical: false, toEnd: false))),
+                                        (true, "Medium → small shrinks right", AnyView(ShrinkGlyph(vertical: false, toEnd: true))),
+                                    ])
+                                    Text("Medium ↔ small").font(.system(size: 9)).foregroundStyle(.tertiary)
+                                }
+                            }
+                        }
                     }
 
                     SectionLabel(text: "Rings")
@@ -965,5 +1003,58 @@ struct AboutPanel: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+}
+
+
+// MARK: - Shrink direction
+
+/// Diagram of a shrink: dashed outline = the size before, solid block = where the widget ends up.
+/// Vertical: large → medium, keeping the top (or bottom). Horizontal: medium → small, keeping the left (or right).
+struct ShrinkGlyph: View {
+    let vertical: Bool
+    let toEnd: Bool     // down / right
+    var scale: CGFloat = 1
+
+    var body: some View {
+        let u: CGFloat = 8 * scale, gap: CGFloat = 1.5 * scale, r: CGFloat = 2.5 * scale
+        let outer = CGSize(width: 2 * u + gap, height: vertical ? 2 * u + gap : u)
+        let inner = CGSize(width: vertical ? outer.width : u, height: u)
+        let align: Alignment = vertical ? (toEnd ? .bottom : .top) : (toEnd ? .trailing : .leading)
+        ZStack(alignment: align) {
+            RoundedRectangle(cornerRadius: r, style: .continuous)
+                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [2, 1.5]))
+                .opacity(0.55)
+                .frame(width: outer.width, height: outer.height)
+            RoundedRectangle(cornerRadius: r, style: .continuous)
+                .frame(width: inner.width, height: inner.height)
+        }
+        .frame(width: outer.width, height: outer.height)
+    }
+}
+
+/// Segmented choice with drawn icons (system segmented pickers only take text or SF Symbols).
+struct IconChoice<Value: Hashable>: View {
+    @Binding var selection: Value
+    let options: [(Value, String, AnyView)]
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(Array(options.enumerated()), id: \.offset) { _, o in
+                let selected = selection == o.0
+                Button { withAnimation(.easeOut(duration: 0.15)) { selection = o.0 } } label: {
+                    o.2
+                        .foregroundStyle(selected ? Palette.claude : Color.primary.opacity(0.62))
+                        .frame(width: 38, height: 30)
+                        .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(selected ? Palette.claude.opacity(0.18) : Color.clear))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(o.1)
+            }
+        }
+        .padding(2)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.06)))
     }
 }

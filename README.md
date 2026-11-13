@@ -1,10 +1,7 @@
-<img src="docs/images/icon-header.png" width="84" align="left" alt="Claude Usage icon">
-
-<h1>Claude Usage</h1>
-
-A Liquid Glass desktop widget for macOS that shows your Claude plan limits live: how much of your 5-hour session and weekly limit you've used, whether you're on pace, and when you'll run out.
-
-<br clear="left">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/header-dark.svg">
+  <img src="docs/images/header-light.svg" width="840" alt="Claude Usage: a Liquid Glass desktop widget for macOS that shows your Claude plan limits live: how much of your 5-hour session and weekly limit you've used, whether you're on pace, and when you'll run out.">
+</picture>
 
 <a href="../../releases/latest/download/ClaudeUsage.zip"><b>⬇︎ Download ClaudeUsage.zip</b></a> &nbsp;·&nbsp; macOS 26+ &nbsp;·&nbsp; Apple Silicon &amp; Intel
 

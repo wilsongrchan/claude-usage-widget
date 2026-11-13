@@ -17,26 +17,23 @@
 > **Unofficial.** This app is not made by, affiliated with, or endorsed by Anthropic.
 
 <p align="center">
-  <img src="docs/images/large.png" width="380" alt="Large widget">
-</p>
-<p align="center">
-  <img src="docs/images/medium.png" width="330" alt="Medium widget">
-  &nbsp;
-  <img src="docs/images/small.png" width="165" alt="Small widget">
-  &nbsp;
-  <img src="docs/images/small-mono.png" width="165" alt="Small widget, monochrome">
+  <img src="docs/images/widgets.png" width="560" alt="Medium, small, small monochrome and large widgets">
 </p>
 
 ## Features
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/features-dark.png">
+    <img src="docs/images/features-light.png" width="720" alt="Large widget with callouts: session ring, weekly ring, pace marker, pace note, reset countdown, saved resets">
+  </picture>
+</p>
+
 <img src="docs/images/desktop.png" width="250" align="right" alt="Medium widget alongside native macOS widgets">
 
-- **Session and weekly rings.** Two gauges for your 5-hour session limit and your weekly limit, with reset countdowns. They go from Claude orange to dark orange to dark red as you approach a limit.
-- **Pace marker.** A white tick shows where your usage *should* be if you spread it evenly. Each ring also says **On pace**, **Ahead of pace +12%**, or **12% to spare**.
 - **Run-out forecast.** When you're ahead of pace, it estimates when you'll hit the limit, for example "Runs out 4:10 PM".
 - **Weekly budgeting.** Split the weekly ring into 7 even days, 5 weekdays, or your own percentage for each day (say, more on Monday and less on the weekend). The pace marker follows your plan.
 - **Alerts you set yourself.** Notifications at 80% and 95% by default, set separately for session, weekly and model limits. Add as many thresholds as you like.
-- **Saved-reset reminders.** Track saved limit resets and get reminded before they expire.
 - **Today by the hour.** A spark-shaped chart of which hours of today you used Claude most, plus a weekly split by app (Claude Code vs. chat).
 - **Menu bar gauge.** A tiny ring and percentage in the menu bar. Click it for the full widget.
 - **Three sizes.** Small (1 slot), medium (2×1, landscape) and large (2×2). Switching sizes animates smoothly, and you choose which way it grows and shrinks.

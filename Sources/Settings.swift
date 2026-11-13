@@ -123,12 +123,27 @@ struct LabeledPicker<Value: Hashable>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-            Picker("", selection: $selection) {
-                ForEach(Array(options.enumerated()), id: \.offset) { _, o in Text(o.0).tag(o.1) }
+            // Custom segmented control: the system one always highlights in blue.
+            HStack(spacing: 2) {
+                ForEach(Array(options.enumerated()), id: \.offset) { _, o in
+                    let selected = selection == o.1
+                    Button { withAnimation(.easeOut(duration: 0.15)) { selection = o.1 } } label: {
+                        Text(o.0)
+                            .font(.system(size: 11, weight: selected ? .semibold : .regular))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .foregroundStyle(selected ? Palette.claude : Color.primary.opacity(0.75))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 20)
+                            .background(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .fill(selected ? Palette.claude.opacity(0.18) : Color.clear))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .controlSize(.small)
+            .padding(2)
+            .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.primary.opacity(0.06)))
         }
     }
 }

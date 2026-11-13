@@ -1,37 +1,27 @@
-<p align="center">
-  <img src="docs/images/icon.png" width="96" alt="Claude Usage icon">
-</p>
+<img src="docs/images/icon-header.png" width="84" align="left" alt="Claude Usage icon">
 
-<h1 align="center">Claude Usage</h1>
+<h1>Claude Usage</h1>
 
-<p align="center">
-  A Liquid Glass desktop widget for macOS that shows your Claude plan limits live:<br>
-  how much of your 5-hour session and weekly limit you've used, whether you're on pace, and when you'll run out.
-</p>
+A Liquid Glass desktop widget for macOS that shows your Claude plan limits live: how much of your 5-hour session and weekly limit you've used, whether you're on pace, and when you'll run out.
 
-<p align="center">
-  <a href="../../releases/latest/download/ClaudeUsage.zip"><b>⬇︎ Download ClaudeUsage.zip</b></a>
-  &nbsp;·&nbsp; macOS 26+ &nbsp;·&nbsp; Apple Silicon &amp; Intel
-</p>
+<br clear="left">
+
+<a href="../../releases/latest/download/ClaudeUsage.zip"><b>⬇︎ Download ClaudeUsage.zip</b></a> &nbsp;·&nbsp; macOS 26+ &nbsp;·&nbsp; Apple Silicon &amp; Intel
 
 > **Unofficial.** This app is not made by, affiliated with, or endorsed by Anthropic.
 
 <p align="center">
-  <img src="docs/images/widgets.png" width="560" alt="Medium, small, small monochrome and large widgets">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/overview-dark.png">
+    <img src="docs/images/overview-light.png" width="860" alt="Medium, small, monochrome and large widgets with callouts: ring slices, pace marker, pace note, saved resets, run-out forecast">
+  </picture>
 </p>
 
 ## Features
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/features-dark.png">
-    <img src="docs/images/features-light.png" width="720" alt="Large widget with callouts: session ring, weekly ring, pace marker, pace note, reset countdown, saved resets">
-  </picture>
-</p>
+<img src="docs/images/desktop-menubar.png" width="136" align="right" alt="Medium widget alongside native macOS widgets, and the menu bar gauge with its popover">
 
-<img src="docs/images/desktop.png" width="250" align="right" alt="Medium widget alongside native macOS widgets">
-
-- **Run-out forecast.** When you're ahead of pace, it estimates when you'll hit the limit, for example "Runs out 4:10 PM".
+- **Run-out forecast.** When you're ahead of pace, it estimates when you'll hit the limit, for example "Runs out 4:10 PM" or "Runs out Tue 18:00", following your Mac's 12/24-hour setting.
 - **Weekly budgeting.** Split the weekly ring into 7 even days, 5 weekdays, or your own percentage for each day (say, more on Monday and less on the weekend). The pace marker follows your plan.
 - **Alerts you set yourself.** Notifications at 80% and 95% by default, set separately for session, weekly and model limits. Add as many thresholds as you like.
 - **Today by the hour.** A spark-shaped chart of which hours of today you used Claude most, plus a weekly split by app (Claude Code vs. chat).
@@ -40,16 +30,6 @@
 - **Feels native.** Liquid Glass, light and dark themes, the same rounded corners as macOS widgets, and a translucent monochrome look while you're in other apps. It snaps to the same grid as your desktop widgets and keeps out of their way.
 
 <br clear="right">
-
-<p align="center">
-  <img src="docs/images/menubar.png" width="300" alt="Menu bar gauge and popover">
-</p>
-
-<p align="center">
-  <img src="docs/images/settings-appearance.png" width="200" alt="Appearance settings">
-  <img src="docs/images/settings-alerts.png" width="200" alt="Alert settings">
-  <img src="docs/images/settings-data.png" width="200" alt="Today by the hour">
-</p>
 
 ## Install
 
@@ -65,54 +45,33 @@
 
 **Start at login (optional):** System Settings → General → Login Items → **+** → choose ClaudeUsage.
 
-## Using it
+## Buttons
+
+Hover over the widget to show its buttons (top right). Hover over a button to see its name.
 
 | | |
 |---|---|
-| **Left ring** | 5-hour session limit (split into 5 hourly slices) |
-| **Right ring** | Weekly limit (split into daily slices, following your budget) |
-| **White tick** | Where you'd be at an even pace. Arc past the tick means you're using it fast |
-| **↻** (top right) | Refresh now |
-| **Ring icons** | Show or hide the pace marker, and switch between segmented and solid rings |
-| **Size buttons** | Switch to either of the other two sizes (the icon shows which grid cells it fills) |
+| **↻** | Refresh now |
+| **Ring icons** | Show or hide the pace marker; switch between segmented and solid rings |
+| **Size buttons** | Switch to either of the other two sizes |
 | **Gear** | Settings |
-| **Reset chip** (bottom) | Saved resets and when they expire. Click to edit |
 
-The buttons appear when you hover over the widget. Hover over a button to see its name.
-
-Ahead of pace, the widget also forecasts when you'll run out, for example "Runs out 18:10" or "Runs out Tue 9 AM" (following your Mac's 12/24-hour setting).
+Click the **saved-reset chip** at the bottom to edit your saved resets.
 
 ## Customize
 
-Click the **gear** to open Settings.
+Click the **gear** to open Settings. You can change:
 
-**Appearance**
+- **Look:** theme, size, which way it resizes, full color or monochrome, and segmented or solid rings
+- **Weekly budget:** 7 even days, weekdays only, or your own percentage per day
+- **Alerts:** your own thresholds for session, weekly and model limits, plus saved-reset reminders
+- **Extras:** pace marker, Fable usage bar, menu bar gauge, and floating above windows
 
-| Setting | Options |
-|---|---|
-| Theme | Auto · Light · Dark |
-| Widget style | Automatic (fades like desktop widgets while you're in an app) · Full color · Monochrome |
-| Size | Small (1×1) · Medium (2×1) · Large (2×2) |
-| Resize direction | Large ↔ medium grows/shrinks up or down; medium ↔ small left or right |
-| Pace marker | On / off |
-| Segmented rings | On / off |
-| Weekly ring slices | 7 days · Weekdays · Custom % per day (Mon–Sun) |
-| Fable usage bar | On / off (model-specific weekly limit) |
-| Menu bar gauge | On / off |
-| Float above windows | On / off (off keeps it on the desktop like a native widget) |
-
-**Alerts**
-
-| Setting | Default |
-|---|---|
-| Session limit alerts | 80%, 95%. Add or remove any thresholds |
-| Weekly limit alerts | 80%, 95%. Add or remove any thresholds |
-| Model limit alerts (e.g. Fable) | 80%, 95%. Add or remove any thresholds |
-| Session reset alert | On. Only fires if you'd used 50% or more |
-| Saved-reset reminders | 7 days, 1 day, 3 hours before expiry. Add or remove any reminder |
-
-**Data:** today's usage by hour, your busiest hour, and this week's split by app.
-**About:** privacy details, disclaimer, Refresh and Quit.
+<p align="center">
+  <img src="docs/images/settings-appearance.png" width="200" alt="Appearance settings">
+  <img src="docs/images/settings-alerts.png" width="200" alt="Alert settings">
+  <img src="docs/images/settings-data.png" width="200" alt="Today by the hour">
+</p>
 
 ## Privacy
 

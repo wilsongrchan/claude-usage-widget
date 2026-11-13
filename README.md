@@ -81,7 +81,7 @@
 | **Gear** | Settings |
 | **Reset chip** (bottom) | Saved resets and when they expire. Click to edit |
 
-Hover over any button to see its name. In the small widget the buttons appear when you hover.
+The buttons appear when you hover over the widget. Hover over a button to see its name.
 
 Ahead of pace, the widget also forecasts when you'll run out, for example "Runs out 18:10" or "Runs out Tue 9 AM" (following your Mac's 12/24-hour setting).
 

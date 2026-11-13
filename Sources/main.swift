@@ -814,6 +814,9 @@ struct WidgetView: View {
     var onLevelChange: (Bool) -> Void
     var onSizeChange: (Bool) -> Void
 
+    /// Header buttons appear only while the pointer is over the widget (always in the menu bar popover).
+    var showControls: Bool { forceLarge || hovering }
+
     var controls: ControlBar {
         ControlBar(store: store, showSizeToggle: !forceLarge, showRefresh: true, onSettings: { open(.settings) },
                    onLevelChange: onLevelChange, onSizeChange: onSizeChange)
@@ -1101,7 +1104,8 @@ struct WidgetView: View {
             .layoutPriority(1)
             Spacer(minLength: 4)
             if resetCount > 0 { ResetChip(now: store.now, compact: true, onTap: { open(.resets) }) }
-            controls.opacity(hovering ? 1 : 0.55)
+            controls.opacity(showControls ? 1 : 0)
+                .allowsHitTesting(showControls)
                 .matchedGeometryEffect(id: "controls", in: rings)
         }
         .zIndex(1)   // keep the hover labels above the rings
@@ -1247,7 +1251,8 @@ struct WidgetView: View {
                         .help("Anthropic's usage API asked us to slow down (or you're offline). The numbers shown are from the last successful update.")
             }
             Spacer()
-            controls.opacity(hovering ? 1 : 0.55)
+            controls.opacity(showControls ? 1 : 0)
+                .allowsHitTesting(showControls)
                 .matchedGeometryEffect(id: "controls", in: rings)
         }
     }

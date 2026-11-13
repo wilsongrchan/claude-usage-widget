@@ -42,13 +42,13 @@
 <br clear="right">
 
 <p align="center">
-  <img src="docs/images/menubar.png" width="380" alt="Menu bar gauge and popover">
+  <img src="docs/images/menubar.png" width="300" alt="Menu bar gauge and popover">
 </p>
 
 <p align="center">
-  <img src="docs/images/settings-appearance.png" width="250" alt="Appearance settings">
-  <img src="docs/images/settings-alerts.png" width="250" alt="Alert settings">
-  <img src="docs/images/settings-data.png" width="250" alt="Today by the hour">
+  <img src="docs/images/settings-appearance.png" width="200" alt="Appearance settings">
+  <img src="docs/images/settings-alerts.png" width="200" alt="Alert settings">
+  <img src="docs/images/settings-data.png" width="200" alt="Today by the hour">
 </p>
 
 ## Install

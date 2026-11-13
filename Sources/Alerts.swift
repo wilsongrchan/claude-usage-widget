@@ -140,17 +140,18 @@ struct ForecastNote: View {
     var body: some View {
         if stacked, let hit {
             let sameDay = Calendar.current.isDate(hit, inSameDayAs: now)
-            let time = sameDay ? hit.formatted(.dateTime.hour().minute())
-                               : hit.formatted(.dateTime.weekday(.abbreviated).hour())
-            StackedNote(top: hit <= now ? "Limit" : "~\(time)", bottom: hit <= now ? "reached" : "runs out",
+            let time = sameDay ? forecastTime(hit)
+                               : forecastDay(hit)
+            StackedNote(top: hit <= now ? "Limit" : "\(time)", bottom: hit <= now ? "reached" : "runs out",
                         icon: "hourglass", color: dimmed ? Color.white.opacity(0.95) : Palette.rust)
                 .help("At your current rate you'll hit this limit before it resets.")
         } else if let hit {
             let sameDay = Calendar.current.isDate(hit, inSameDayAs: now)
-            let time = sameDay ? hit.formatted(.dateTime.hour().minute())
-                               : hit.formatted(.dateTime.weekday(.abbreviated).hour())
-            Label(hit <= now ? "Limit reached" : (short ? "Out ~\(time)" : "Runs out ~\(time)"),
+            let time = sameDay ? forecastTime(hit)
+                               : forecastDay(hit)
+            Label(hit <= now ? "Limit reached" : (short ? "Out \(time)" : "Runs out \(time)"),
                   systemImage: "hourglass")
+                .labelStyle(FixedIconLabelStyle())
                 .font(.system(size: short ? 10 : 11, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(dimmed ? Color.white.opacity(0.95) : Palette.rust)
@@ -159,3 +160,21 @@ struct ForecastNote: View {
         }
     }
 }
+
+
+/// Forecast times follow the Mac's 12/24-hour setting, but are always unambiguous:
+/// 12-hour → "4:10 PM", "Tue 8 AM"; 24-hour → "16:10", "Tue 8:00" (never a bare "08").
+private var uses24Hour: Bool {
+    switch Locale.current.hourCycle {
+    case .zeroToTwentyThree, .oneToTwentyFour: true
+    default: false
+    }
+}
+private func formatter(_ pattern: String) -> DateFormatter {
+    let f = DateFormatter()
+    f.locale = Locale(identifier: "en_US_POSIX")
+    f.dateFormat = pattern
+    return f
+}
+func forecastTime(_ d: Date) -> String { formatter(uses24Hour ? "H:mm" : "h:mm a").string(from: d) }
+func forecastDay(_ d: Date) -> String { formatter(uses24Hour ? "EEE H:mm" : "EEE h a").string(from: d) }

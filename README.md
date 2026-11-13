@@ -26,13 +26,14 @@
 
 - **Session and weekly rings.** Two gauges for your 5-hour session limit and your weekly limit, with reset countdowns. They go from Claude orange to dark orange to dark red as you approach a limit.
 - **Pace marker.** A white tick shows where your usage *should* be if you spread it evenly. Each ring also says **On pace**, **Ahead of pace +12%**, or **12% to spare**.
-- **Run-out forecast.** When you're ahead of pace, it estimates when you'll hit the limit, for example "Runs out ~4:10 PM".
+- **Run-out forecast.** When you're ahead of pace, it estimates when you'll hit the limit, for example "Runs out 4:10 PM".
 - **Weekly budgeting.** Split the weekly ring into 7 even days, 5 weekdays, or your own percentage for each day (say, more on Monday and less on the weekend). The pace marker follows your plan.
 - **Alerts you set yourself.** Notifications at 80% and 95% by default, set separately for session, weekly and model limits. Add as many thresholds as you like.
 - **Saved-reset reminders.** Track saved limit resets and get reminded before they expire.
 - **Today by the hour.** A spark-shaped chart of which hours of today you used Claude most, plus a weekly split by app (Claude Code vs. chat).
 - **Menu bar gauge.** A tiny ring and percentage in the menu bar. Click it for the full widget.
-- **Feels native.** Liquid Glass, light and dark themes, and snapping to the same grid as your macOS desktop widgets, in a small (1 slot) or large (2×2) size.
+- **Three sizes.** Small (1 slot), medium (2×1, landscape) and large (2×2). Switching sizes animates smoothly, and you choose which way it grows and shrinks.
+- **Feels native.** Liquid Glass, light and dark themes, the same rounded corners as macOS widgets, and a translucent monochrome look while you're in other apps. It snaps to the same grid as your desktop widgets and keeps out of their way.
 
 <p align="center">
   <img src="docs/images/settings-appearance.png" width="250" alt="Appearance settings">
@@ -63,11 +64,13 @@
 | **White tick** | Where you'd be at an even pace. Arc past the tick means you're using it fast |
 | **↻** (top right) | Refresh now |
 | **Ring icons** | Show or hide the pace marker, and switch between segmented and solid rings |
-| **Arrows** | Switch between small and large |
+| **Size buttons** | Switch to either of the other two sizes (the icon shows which grid cells it fills) |
 | **Gear** | Settings |
 | **Reset chip** (bottom) | Saved resets and when they expire. Click to edit |
 
 Hover over any button to see its name. In the small widget the buttons appear when you hover.
+
+Ahead of pace, the widget also forecasts when you'll run out, for example "Runs out 18:10" or "Runs out Tue 9 AM" (following your Mac's 12/24-hour setting).
 
 ## Customize
 
@@ -78,7 +81,9 @@ Click the **gear** to open Settings.
 | Setting | Options |
 |---|---|
 | Theme | Auto · Light · Dark |
-| Size | Small (1 slot) · Large (2×2) |
+| Widget style | Automatic (fades like desktop widgets while you're in an app) · Full color · Monochrome |
+| Size | Small (1×1) · Medium (2×1) · Large (2×2) |
+| Resize direction | Large ↔ medium grows/shrinks up or down; medium ↔ small left or right |
 | Pace marker | On / off |
 | Segmented rings | On / off |
 | Weekly ring slices | 7 days · Weekdays · Custom % per day (Mon–Sun) |

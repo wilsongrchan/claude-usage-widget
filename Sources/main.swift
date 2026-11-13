@@ -171,7 +171,7 @@ final class UsageStore: ObservableObject {
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue("claude-usage-widget/0.0.1", forHTTPHeaderField: "User-Agent")
+        req.setValue("claude-usage-widget/0.1.0", forHTTPHeaderField: "User-Agent")
         req.timeoutInterval = 20
         let (data, resp) = try await URLSession.shared.data(for: req)
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
@@ -414,11 +414,22 @@ struct PaceNote: View {
               : diff <= -3 ? (short ? "\(d)% spare" : "\(d)% to spare", "checkmark.circle.fill", Palette.claude)
               :              ("On pace", "equal.circle.fill", Palette.claude)
             Label(text, systemImage: icon)
+                .labelStyle(FixedIconLabelStyle())
                 .font(.system(size: short ? 10 : 11, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(dimmed ? Color.white.opacity(0.95) : color)
                 .lineLimit(1)
                 .help("Ahead of pace means you're using this limit faster than time is passing, and may hit it before it resets.")
+        }
+    }
+}
+
+/// Icons sit in a fixed-width slot so stacked notes line up icon-centre to icon-centre.
+struct FixedIconLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 5) {
+            configuration.icon.frame(width: 14)
+            configuration.title
         }
     }
 }
@@ -432,7 +443,7 @@ struct StackedNote: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
-            Image(systemName: icon).font(.system(size: 10, weight: .semibold))
+            Image(systemName: icon).font(.system(size: 10, weight: .semibold)).frame(width: 12)
             VStack(alignment: .leading, spacing: 0) {
                 Text(top).font(.system(size: 11, weight: .semibold))
                 Text(bottom).font(.system(size: 9.5, weight: .medium)).opacity(0.8)
@@ -811,15 +822,19 @@ struct WidgetView: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: contentAnchor)
+        // minWidth/minHeight 0: never report a size bigger than the glass. Otherwise, while the
+        // glass is still growing, the bigger layout gets centered in it and jumps.
+        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: contentAnchor)
         .overlay(alignment: .top) {
             // Small widget: controls float in on hover.
             if size == .small && hovering && stack.isEmpty {
                 controls
                     .padding(4)
                     .background(Capsule().fill(.regularMaterial))
+                    // Same buttons as the medium/large header: glide there when the size changes.
+                    .matchedGeometryEffect(id: "controls", in: rings)
                     .padding(.top, 6)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(.opacity)
             }
         }
         .onHover { h in withAnimation(.easeOut(duration: 0.15)) { hovering = h } }
@@ -870,10 +885,13 @@ struct WidgetView: View {
                           showMarker: showPaceMarker, label: "Session", match: ("session", rings))
                     .help("Each slice is one hour of the 5-hour session. The white tick marks now.")
                 Text(resetText(sReset, now: store.now)).caption()
-                PaceNote(percent: session, elapsed: sElapsed)
-                if aheadOfPace(session, sElapsed) {
-                    ForecastNote(hit: Forecast.hitTime(util: session, resetsAt: sReset, duration: 5 * 3600,
-                                                       now: store.now, useRecent: true), now: store.now)
+                // Left-aligned together, icons on one centre line.
+                VStack(alignment: .leading, spacing: 5) {
+                    PaceNote(percent: session, elapsed: sElapsed)
+                    if aheadOfPace(session, sElapsed) {
+                        ForecastNote(hit: Forecast.hitTime(util: session, resetsAt: sReset, duration: 5 * 3600,
+                                                           now: store.now, useRecent: true), now: store.now)
+                    }
                 }
             }
             .frame(maxWidth: .infinity)
@@ -883,10 +901,12 @@ struct WidgetView: View {
                           current: budget?.current, showMarker: showPaceMarker, label: "Weekly", match: ("weekly", rings))
                     .help("Each slice is one day's budget. The white tick marks where you should be by now.")
                 Text(resetText(wReset, now: store.now)).caption()
-                PaceNote(percent: weekly, elapsed: wElapsed)
-                if aheadOfPace(weekly, wElapsed) {
-                    ForecastNote(hit: Forecast.hitTime(util: weekly, resetsAt: wReset, duration: 7 * 86400,
-                                                       now: store.now, useRecent: false), now: store.now)
+                VStack(alignment: .leading, spacing: 5) {
+                    PaceNote(percent: weekly, elapsed: wElapsed)
+                    if aheadOfPace(weekly, wElapsed) {
+                        ForecastNote(hit: Forecast.hitTime(util: weekly, resetsAt: wReset, duration: 7 * 86400,
+                                                           now: store.now, useRecent: false), now: store.now)
+                    }
                 }
             }
             .frame(maxWidth: .infinity)
@@ -1269,7 +1289,7 @@ enum WidgetSize: Int, CaseIterable {
     static let curve = (0.32, 0.72, 0.0, 1.0)   // gentle ease-out
     static let animation = Animation.timingCurve(curve.0, curve.1, curve.2, curve.3, duration: duration)
     /// When growing, the rings wait a beat so the glass has room for them before they move in.
-    static let growDelay = 0.09
+    static let growDelay = 0.035
     private(set) static var lastChangeGrew = false
     static var changeAnimation: Animation { lastChangeGrew ? animation.delay(growDelay) : animation }
     /// Call before changing size so the ring animation knows which way it's going.

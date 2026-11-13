@@ -52,9 +52,10 @@ USING IT
 - Left ring: your 5-hour session limit. Right ring: your weekly limit.
 - White tick: where you'd be if you spread your usage evenly. If the
   coloured arc is past the tick, you're using it faster than even pace.
-- Buttons in the top right: refresh, pace marker, segmented rings, size,
-  and settings. Hover over a button to see its name.
-- Settings has Appearance (theme, size, weekly split), Alerts (choose
+- Buttons in the top right: refresh, pace marker, segmented rings, the two
+  other sizes (small, medium, large), and settings. Hover over a button to
+  see its name.
+- Settings has Appearance (theme, size, resize direction, weekly split), Alerts (choose
   when to be notified), Data (today's usage by hour), and About.
 - The small orange ring in your menu bar shows session usage at a glance.
   Click it to see the full widget.

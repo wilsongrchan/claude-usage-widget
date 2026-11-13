@@ -18,11 +18,18 @@
 
 <p align="center">
   <img src="docs/images/large.png" width="380" alt="Large widget">
+</p>
+<p align="center">
+  <img src="docs/images/medium.png" width="330" alt="Medium widget">
   &nbsp;
-  <img src="docs/images/small.png" width="190" alt="Small widget">
+  <img src="docs/images/small.png" width="165" alt="Small widget">
+  &nbsp;
+  <img src="docs/images/small-mono.png" width="165" alt="Small widget, monochrome">
 </p>
 
 ## Features
+
+<img src="docs/images/desktop.png" width="250" align="right" alt="Medium widget alongside native macOS widgets">
 
 - **Session and weekly rings.** Two gauges for your 5-hour session limit and your weekly limit, with reset countdowns. They go from Claude orange to dark orange to dark red as you approach a limit.
 - **Pace marker.** A white tick shows where your usage *should* be if you spread it evenly. Each ring also says **On pace**, **Ahead of pace +12%**, or **12% to spare**.
@@ -34,6 +41,12 @@
 - **Menu bar gauge.** A tiny ring and percentage in the menu bar. Click it for the full widget.
 - **Three sizes.** Small (1 slot), medium (2×1, landscape) and large (2×2). Switching sizes animates smoothly, and you choose which way it grows and shrinks.
 - **Feels native.** Liquid Glass, light and dark themes, the same rounded corners as macOS widgets, and a translucent monochrome look while you're in other apps. It snaps to the same grid as your desktop widgets and keeps out of their way.
+
+<br clear="right">
+
+<p align="center">
+  <img src="docs/images/menubar.png" width="380" alt="Menu bar gauge and popover">
+</p>
 
 <p align="center">
   <img src="docs/images/settings-appearance.png" width="250" alt="Appearance settings">

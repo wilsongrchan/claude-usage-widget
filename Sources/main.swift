@@ -99,6 +99,13 @@ final class UsageStore: ObservableObject {
             Task { await refresh() }
         }
         schedulePoll()
+        // Catch up straight after the Mac wakes instead of waiting for the next poll.
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { _ in
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(3))   // let the network come back first
+                await self.refresh()
+            }
+        }
         clockTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { _ in
             Task { @MainActor in self.now = Date(); ResetReminder.check(); LimitAlerts.checkSessionReset(now: Date()) }
         }
@@ -171,9 +178,17 @@ final class UsageStore: ObservableObject {
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue("claude-usage-widget/0.1.0", forHTTPHeaderField: "User-Agent")
+        req.setValue("claude-usage-widget/0.1.1", forHTTPHeaderField: "User-Agent")
         req.timeoutInterval = 20
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        // A fresh session per poll: the shared one can keep reusing a connection that died
+        // across sleep or a network change, so every request silently times out forever.
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 20
+        config.timeoutIntervalForResource = 30
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        let session = URLSession(configuration: config)
+        defer { session.finishTasksAndInvalidate() }
+        let (data, resp) = try await session.data(for: req)
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
         switch code {
         case 200: return (try JSONDecoder().decode(Usage.self, from: data), data)

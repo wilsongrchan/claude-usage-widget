@@ -12,12 +12,14 @@ final class MenuBarController: NSObject {
     private let popover = NSPopover()
     private var cancellable: AnyCancellable?
     private var defaultsObserver: NSObjectProtocol?
+    private var outsideClickMonitor: Any?
 
     init(store: UsageStore, content: NSViewController) {
         super.init()
         popover.contentViewController = content
         popover.behavior = .transient
         popover.animates = true
+        popover.delegate = self
 
         lastUsage = store.usage
         cancellable = store.$usage.receive(on: RunLoop.main).sink { [weak self] u in self?.update(u) }
@@ -64,13 +66,27 @@ final class MenuBarController: NSObject {
         }
     }
 
+    /// Popovers from the menu bar follow the menu bar's look (set by the wallpaper), not the
+    /// app's, so pass the Theme setting on explicitly (Auto = the system's light/dark).
+    func applyTheme() {
+        popover.appearance = NSApp.appearance
+            ?? NSAppearance(named: NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) ?? .aqua)
+    }
+
     @objc private func toggle() {
         guard let button = item?.button else { return }
         if popover.isShown {
             popover.performClose(nil)
         } else {
             NSApp.activate()
+            applyTheme()
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            // `.transient` misses clicks on the desktop or in other apps (this app is rarely
+            // the active one), so watch for them while the popover is open.
+            outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(
+                matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
+                MainActor.assumeIsolated { self?.popover.performClose(nil) }
+            }
         }
     }
 
@@ -97,5 +113,12 @@ final class MenuBarController: NSObject {
         }
         img.isTemplate = false
         return img
+    }
+}
+
+extension MenuBarController: NSPopoverDelegate {
+    func popoverDidClose(_ notification: Notification) {
+        if let m = outsideClickMonitor { NSEvent.removeMonitor(m) }
+        outsideClickMonitor = nil
     }
 }

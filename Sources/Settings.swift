@@ -57,6 +57,26 @@ struct PillButton: View {
     }
 }
 
+/// On/off switch that keeps its colour: system switches turn grey whenever the app isn't
+/// frontmost, which for a desktop widget and menu bar popover is nearly always.
+struct PillSwitch: ToggleStyle {
+    func makeBody(configuration c: Configuration) -> some View {
+        Button { withAnimation(.easeOut(duration: 0.15)) { c.isOn.toggle() } } label: {
+            ZStack(alignment: c.isOn ? .trailing : .leading) {
+                Capsule().fill(c.isOn ? AnyShapeStyle(Palette.claude) : AnyShapeStyle(Color.primary.opacity(0.18)))
+                Circle()
+                    .fill(.white)
+                    .shadow(color: .black.opacity(0.2), radius: 0.5, y: 0.5)
+                    .padding(1.5)
+            }
+            .frame(width: 28, height: 16)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(c.isOn ? "On" : "Off")
+    }
+}
+
 struct SettingToggle<Glyph: View>: View {
     let title: String
     @Binding var isOn: Bool
@@ -74,10 +94,8 @@ struct SettingToggle<Glyph: View>: View {
                 .minimumScaleFactor(0.8)
             Spacer(minLength: 4)
             Toggle("", isOn: $isOn)
-                .toggleStyle(.switch)
-                .controlSize(.mini)
+                .toggleStyle(PillSwitch())
                 .labelsHidden()
-                .tint(Palette.claude)
         }
     }
 }
@@ -298,6 +316,9 @@ struct AppearancePanel: View {
     @AppStorage("segmentedRings") var segmentedRings = true
     @AppStorage("weeklySplit") var weeklySplit = 0
     @AppStorage("showScoped") var showScoped = true
+    @AppStorage("showPaceNote") var showPaceNote = true
+    @AppStorage("showForecast") var showForecast = true
+    @AppStorage("showWidget") var showWidget = true
     @AppStorage("menuBar") var menuBar = true
     @AppStorage("floatOnTop") var floatOnTop = false
     @State private var custom: [Double] = WeekBudget.custom
@@ -361,6 +382,10 @@ struct AppearancePanel: View {
                      active: true, glyph: splitGlyphs[weeklySplit], action: { weeklySplit = (weeklySplit + 1) % 3 }),
             TileSpec(id: "fable", help: "Fable usage bar: \(onOff(showScoped)). Shown in the medium and large widgets.",
                      active: showScoped, glyph: AnyView(Image(systemName: "chart.bar.fill")), action: { showScoped.toggle() }),
+            TileSpec(id: "paceNote", help: "Pace note: \(onOff(showPaceNote)). \"On pace\", \"12% to spare\" and so on.",
+                     active: showPaceNote, glyph: AnyView(Image(systemName: "checkmark.circle")), action: { showPaceNote.toggle() }),
+            TileSpec(id: "forecast", help: "Run-out estimate: \(onOff(showForecast)). When you'll hit the limit if you're ahead of pace.",
+                     active: showForecast, glyph: AnyView(Image(systemName: "hourglass")), action: { showForecast.toggle() }),
             TileSpec(id: "menubar", help: "Menu bar gauge: \(onOff(menuBar)).",
                      active: menuBar, glyph: AnyView(Image(systemName: "menubar.rectangle")), action: { menuBar.toggle() }),
             TileSpec(id: "float", help: "Float above windows: \(onOff(floatOnTop)). Off keeps it on the desktop.",
@@ -437,8 +462,19 @@ struct AppearancePanel: View {
                     .opacity(segmentedRings ? 1 : 0.5)
                     SettingToggle(title: "Fable usage bar", isOn: $showScoped) { Image(systemName: "chart.bar.fill") }
 
+                    SectionLabel(text: "Notes")
+                    SettingToggle(title: "Pace note", isOn: $showPaceNote) { Image(systemName: "checkmark.circle") }
+                    SettingToggle(title: "Run-out estimate", isOn: $showForecast) { Image(systemName: "hourglass") }
+
                     SectionLabel(text: "Window")
-                    SettingToggle(title: "Menu bar gauge", isOn: $menuBar) { Image(systemName: "menubar.rectangle") }
+                    SettingToggle(title: "Desktop widget", isOn: Binding(
+                        get: { showWidget }, set: { v in if !v { menuBar = true }; showWidget = v })) {
+                        Image(systemName: "rectangle.on.rectangle")
+                    }
+                    SettingToggle(title: "Menu bar gauge", isOn: Binding(
+                        get: { menuBar }, set: { v in if !v { showWidget = true }; menuBar = v })) {
+                        Image(systemName: "menubar.rectangle")
+                    }
                     SettingToggle(title: "Float above windows", isOn: Binding(
                         get: { floatOnTop }, set: { floatOnTop = $0; onLevelChange($0) })) {
                         Image(systemName: "square.stack")
@@ -571,10 +607,8 @@ struct ThresholdEditor: View {
                 }
                 Spacer(minLength: 4)
                 Toggle("", isOn: Binding(get: { enabled }, set: { enabled = $0; save() }))
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
+                    .toggleStyle(PillSwitch())
                     .labelsHidden()
-                    .tint(Palette.claude)
             }
             if enabled {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 50), spacing: 5)], alignment: .leading, spacing: 5) {
@@ -681,10 +715,8 @@ struct ReminderEditor: View {
                 }
                 Spacer(minLength: 4)
                 Toggle("", isOn: $enabled)
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
+                    .toggleStyle(PillSwitch())
                     .labelsHidden()
-                    .tint(Palette.claude)
             }
             if enabled {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 46), spacing: 5)], alignment: .leading, spacing: 5) {

@@ -672,7 +672,17 @@ struct GearGlyph: View {
     }
 }
 
+private struct IconButtonSizeKey: EnvironmentKey { static let defaultValue: CGFloat = 22 }
+extension EnvironmentValues {
+    /// Header button diameter (smaller in the small widget so all of them fit across 164pt).
+    var iconButtonSize: CGFloat {
+        get { self[IconButtonSizeKey.self] }
+        set { self[IconButtonSizeKey.self] = newValue }
+    }
+}
+
 struct IconButton<Glyph: View>: View {
+    @Environment(\.iconButtonSize) private var side
     var active = false
     let help: String
     let action: () -> Void
@@ -682,7 +692,7 @@ struct IconButton<Glyph: View>: View {
         Button(action: action) {
             glyph()
                 .font(.system(size: 10, weight: .semibold))
-                .frame(width: 22, height: 22)
+                .frame(width: side, height: side)
                 .foregroundStyle(active ? Palette.claude : Color.primary.opacity(0.62))   // explicit grey: shapes and SF Symbols match
                 .background(Circle().fill(active ? Palette.claude.opacity(0.18) : Color.primary.opacity(0.07)))
                 .contentShape(Circle())
@@ -698,6 +708,7 @@ struct ControlBar: View {
     var showRefresh = false
     var onSettings: () -> Void = {}
     @AppStorage("menuBar") var menuBar = true
+    @AppStorage("showWidget") var showWidget = true
     @AppStorage("floatOnTop") var floatOnTop = false
     @AppStorage("showPaceMarker") var showPaceMarker = true
     @AppStorage("segmentedRings") var segmentedRings = true
@@ -711,10 +722,11 @@ struct ControlBar: View {
     @State private var tipTask: Task<Void, Never>?
 
     var body: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: size == .small && showSizeToggle ? 2 : 3) {
             if showRefresh {
                 IconButton(help: "Refresh now", action: { Task { await store.refresh() } }) {
                     Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 11, weight: .heavy))   // ~2pt stroke, like the custom glyphs
                 }
                 .disabled(store.loading)
                 .opacity(store.loading ? 0.5 : 1)
@@ -747,6 +759,18 @@ struct ControlBar: View {
                 GearGlyph()
             }
             .onHover { hover($0, "Settings") }
+            if showSizeToggle {   // desktop widget only, not the menu bar popover
+                IconButton(help: "", action: { CloseMenu.shared.show() }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .heavy))
+                }
+                .onHover { hover($0, "Close") }
+            } else if !showWidget {   // menu bar popover, widget hidden with the X: bring it back
+                IconButton(active: true, help: "", action: { showWidget = true }) {
+                    Image(systemName: "macwindow.badge.plus")
+                }
+                .onHover { hover($0, "Show desktop widget") }
+            }
         }
         .overlay(alignment: .topTrailing) {
             if let tip {
@@ -788,6 +812,33 @@ struct ControlBar: View {
     }
 }
 
+/// The widget's X: hide just the desktop widget (the menu bar gauge stays) or quit.
+@MainActor
+final class CloseMenu: NSObject {
+    static let shared = CloseMenu()
+
+    func show() {
+        let menu = NSMenu()
+        let hide = NSMenuItem(title: "Hide Widget (Keep Menu Bar)", action: #selector(hideWidget), keyEquivalent: "")
+        hide.target = self
+        hide.image = NSImage(systemSymbolName: "menubar.rectangle", accessibilityDescription: nil)
+        let quit = NSMenuItem(title: "Quit Claude Usage", action: #selector(quit), keyEquivalent: "")
+        quit.target = self
+        quit.image = NSImage(systemSymbolName: "power", accessibilityDescription: nil)
+        menu.addItem(hide)
+        menu.addItem(quit)
+        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+    }
+
+    @objc private func hideWidget() {
+        let d = UserDefaults.standard
+        d.set(true, forKey: "menuBar")      // never leave the app with nothing on screen
+        d.set(false, forKey: "showWidget")
+    }
+
+    @objc private func quit() { NSApp.terminate(nil) }
+}
+
 // MARK: - Widget
 
 struct WidgetView: View {
@@ -800,6 +851,8 @@ struct WidgetView: View {
     @State private var stack: [Panel] = []
     @Namespace private var rings
     @AppStorage("showScoped") var showScoped = true
+    @AppStorage("showPaceNote") var showPaceNote = true
+    @AppStorage("showForecast") var showForecast = true
     /// Used by the menu bar popover, which always shows the large layout.
     var forceLarge = false
     var size: WidgetSize { forceLarge ? .large : WidgetSize(rawValue: sizeRaw) ?? .large }
@@ -852,7 +905,8 @@ struct WidgetView: View {
             // Small widget: controls float in on hover.
             if size == .small && hovering && stack.isEmpty {
                 controls
-                    .padding(4)
+                    .environment(\.iconButtonSize, 19)
+                    .padding(3)
                     .background(Capsule().fill(.regularMaterial))
                     // Same buttons as the medium/large header: glide there when the size changes.
                     .matchedGeometryEffect(id: "controls", in: rings)
@@ -910,8 +964,8 @@ struct WidgetView: View {
                 Text(sessionResetText(sReset, now: store.now)).caption()
                 // Left-aligned together, icons on one centre line.
                 VStack(alignment: .leading, spacing: 5) {
-                    PaceNote(percent: session, elapsed: sElapsed)
-                    if aheadOfPace(session, sElapsed) {
+                    if showPaceNote { PaceNote(percent: session, elapsed: sElapsed) }
+                    if showForecast && aheadOfPace(session, sElapsed) {
                         ForecastNote(hit: Forecast.hitTime(util: session, resetsAt: sReset, duration: 5 * 3600,
                                                            now: store.now, useRecent: true), now: store.now)
                     }
@@ -925,8 +979,8 @@ struct WidgetView: View {
                     .help("Each slice is one day's budget. The white tick marks where you should be by now.")
                 Text(resetText(wReset, now: store.now)).caption()
                 VStack(alignment: .leading, spacing: 5) {
-                    PaceNote(percent: weekly, elapsed: wElapsed)
-                    if aheadOfPace(weekly, wElapsed) {
+                    if showPaceNote { PaceNote(percent: weekly, elapsed: wElapsed) }
+                    if showForecast && aheadOfPace(weekly, wElapsed) {
                         ForecastNote(hit: Forecast.hitTime(util: weekly, resetsAt: wReset, duration: 7 * 86400,
                                                            now: store.now, useRecent: false), now: store.now)
                     }
@@ -1017,11 +1071,11 @@ struct WidgetView: View {
         }
         Spacer(minLength: 4)
         HStack {
-            if aheadOfPace(session, sElapsed),
+            if showForecast, aheadOfPace(session, sElapsed),
                let hit = Forecast.hitTime(util: session, resetsAt: sReset, duration: 5 * 3600,
                                           now: store.now, useRecent: true) {
                 ForecastNote(hit: hit, now: store.now, short: true)
-            } else {
+            } else if showPaceNote {
                 PaceNote(percent: session, elapsed: sElapsed, short: true)
             }
             Spacer(minLength: 0)
@@ -1108,7 +1162,16 @@ struct WidgetView: View {
             }
             .layoutPriority(1)
             Spacer(minLength: 4)
-            if resetCount > 0 { ResetChip(now: store.now, compact: true, onTap: { open(.resets) }) }
+            // The chip gives way to the buttons on hover.
+            if resetCount > 0 {
+                ResetChip(now: store.now, compact: true, onTap: { open(.resets) })
+                    .opacity(showControls ? 0 : 1)
+                    .allowsHitTesting(!showControls)
+            }
+        }
+        // Buttons float over the row instead of taking room in it: there isn't space for the
+        // brand, the chip and all the buttons, and an over-wide row shifts the whole layout left.
+        .overlay(alignment: .topTrailing) {
             controls.opacity(showControls ? 1 : 0)
                 .allowsHitTesting(showControls)
                 .matchedGeometryEffect(id: "controls", in: rings)
@@ -1118,14 +1181,14 @@ struct WidgetView: View {
         HStack(spacing: 6) {
             mediumBlock(title: "Session", percent: session, elapsed: sElapsed, reset: sReset,
                         slices: segmentedRings ? uniformSlices(5) : [0, 1], current: nil,
-                        forecast: aheadOfPace(session, sElapsed)
+                        forecast: showForecast && aheadOfPace(session, sElapsed)
                             ? Forecast.hitTime(util: session, resetsAt: sReset, duration: 5 * 3600,
                                                now: store.now, useRecent: true) : nil)
                 .help("Each slice is one hour of the 5-hour session. The white tick marks now.")
             mediumBlock(title: "Weekly", percent: weekly, elapsed: wElapsed, reset: wReset,
                         slices: segmentedRings ? (budget?.boundaries ?? uniformSlices(7)) : [0, 1],
                         current: budget?.current,
-                        forecast: aheadOfPace(weekly, wElapsed)
+                        forecast: showForecast && aheadOfPace(weekly, wElapsed)
                             ? Forecast.hitTime(util: weekly, resetsAt: wReset, duration: 7 * 86400,
                                                now: store.now, useRecent: false) : nil)
                 .help("Each slice is one day's budget. The white tick marks where you should be by now.")
@@ -1170,7 +1233,7 @@ struct WidgetView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if forecast != nil {
                     ForecastNote(hit: forecast, now: store.now, stacked: true)
-                } else {
+                } else if showPaceNote {
                     PaceNote(percent: percent, elapsed: elapsed, stacked: true)
                 }
             }
@@ -1257,6 +1320,8 @@ struct WidgetView: View {
                         .help("Anthropic's usage API asked us to slow down (or you're offline). The numbers shown are from the last successful update.")
             }
             Spacer()
+        }
+        .overlay(alignment: .topTrailing) {   // never widens the layout (see the medium header)
             controls.opacity(showControls ? 1 : 0)
                 .allowsHitTesting(showControls)
                 .matchedGeometryEffect(id: "controls", in: rings)
@@ -1301,9 +1366,9 @@ extension Text {
 
 // MARK: - macOS desktop widget grid
 //
-// Native desktop widgets sit on a 180pt grid that starts 16pt in from the top-left of the
-// screen's visible area; each widget is inset 8pt inside its cells (small = 164×164pt,
-// medium = 344×164pt, large = 344×344pt). The widget snaps to that grid, avoiding
+// Native desktop widgets use 180pt cells, 16pt in from whichever screen edge they're near
+// and flush with each other; each widget is inset 8pt inside its cells (small = 164×164pt,
+// medium = 344×164pt, large = 344×344pt). The widget snaps the same way, avoiding
 // cells already taken by native widgets (read from Notification Center's placement data).
 
 /// Widget sizes, matching macOS: small (1×1), medium (2×1, landscape) and large (2×2).
@@ -1343,21 +1408,12 @@ enum Grid {
     static func outer(_ s: WidgetSize) -> CGSize { CGSize(width: outerSize(s.cols), height: outerSize(s.rows)) }
     static func inner(_ s: WidgetSize) -> CGSize { CGSize(width: widgetSize(s.cols), height: widgetSize(s.rows)) }
 
-    struct Cell: Hashable { let col: Int; let row: Int }
-
-    static func dims(_ v: NSRect) -> (cols: Int, rows: Int) {
-        (Int((v.width - margin * 2 + 1) / pitch), Int((v.height - margin * 2 + 1) / pitch))
-    }
-
-    /// Window frame (AppKit, bottom-left origin) for a cell whose top-left is (col,row).
-    static func frame(for c: Cell, size s: WidgetSize, in v: NSRect) -> NSRect {
+    /// Top-right slot: where a new widget starts.
+    static func topRight(size s: WidgetSize, in v: NSRect) -> NSRect {
         let o = outer(s)
-        return NSRect(x: v.minX + margin + CGFloat(c.col) * pitch,
-                      y: v.maxY - margin - CGFloat(c.row) * pitch - o.height,
-                      width: o.width, height: o.height)
+        return NSRect(x: v.maxX - margin - o.width, y: v.maxY - margin - o.height, width: o.width, height: o.height)
     }
 
-    /// Cells occupied by native widgets on a display with this visible size.
     /// Notification Center keeps its prefs inside its own container, out of reach of
     /// `UserDefaults(suiteName:)`, so ask the system `defaults` tool (via cfprefsd) instead.
     static func placementData() -> Data? {
@@ -1375,46 +1431,75 @@ enum Grid {
         return widgets["DesktopWidgetPlacementStorage"] as? Data
     }
 
-    static func occupied(visibleSize: CGSize) -> Set<Cell> {
+    /// Native widget groups on this display: each group's top-left (points from the visible
+    /// frame's top-left) and the screen rects of its widgets' cells.
+    static func nativeLayout(in v: NSRect) -> (origins: [CGPoint], rects: [NSRect]) {
         guard let data = placementData(),
               let root = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
-              let displays = root["NumberedDisplays"] as? [[String: Any]] else { return [] }
-        var cells = Set<Cell>()
+              let displays = root["NumberedDisplays"] as? [[String: Any]] else { return ([], []) }
+        // Use the entry saved for this visible size; failing that, the closest one.
+        var best: ([String: Any], Double)?
         for display in displays {
             for res in (display["Resolutions"] as? [[String: Any]]) ?? [] {
-                guard let size = res["Size"] as? [Double], size.count == 2,
-                      abs(size[0] - visibleSize.width) < 1, abs(size[1] - visibleSize.height) < 1 else { continue }
-                for group in (res["Groups"] as? [[String: Any]]) ?? [] {
-                    let origin = (group["Origin"] as? [Double]) ?? [16, 16]
-                    let dc = Int(((origin[0] - margin) / pitch).rounded())
-                    let dr = Int(((origin[1] - margin) / pitch).rounded())
-                    for item in (group["Items"] as? [[String: Any]]) ?? [] {
-                        guard let col = item["Column"] as? Int, let row = item["Row"] as? Int else { continue }
-                        let sizeKey = (item["Size"] as? [String: Any])?.keys.first ?? "Small"
-                        let (w, h): (Int, Int) = switch sizeKey {
-                            case "Medium": (2, 1)
-                            case "Large": (2, 2)
-                            case "ExtraLarge": (4, 2)
-                            default: (1, 1)
-                        }
-                        for x in 0..<w { for y in 0..<h { cells.insert(Cell(col: col + dc + x, row: row + dr + y)) } }
-                    }
-                }
+                guard let size = res["Size"] as? [Double], size.count == 2 else { continue }
+                let d = abs(size[0] - v.width) + abs(size[1] - v.height)
+                if best == nil || d < best!.1 { best = (res, d) }
             }
         }
-        return cells
+        guard let res = best?.0 else { return ([], []) }
+        var origins: [CGPoint] = [], rects: [NSRect] = []
+        for group in (res["Groups"] as? [[String: Any]]) ?? [] {
+            let o = (group["Origin"] as? [Double]) ?? [Double(margin), Double(margin)]
+            guard o.count == 2 else { continue }
+            origins.append(CGPoint(x: o[0], y: o[1]))
+            for item in (group["Items"] as? [[String: Any]]) ?? [] {
+                guard let col = item["Column"] as? Int, let row = item["Row"] as? Int else { continue }
+                let sizeKey = (item["Size"] as? [String: Any])?.keys.first ?? "Small"
+                let (w, h): (Int, Int) = switch sizeKey {
+                    case "Medium": (2, 1)
+                    case "Large": (2, 2)
+                    case "ExtraLarge": (4, 2)
+                    default: (1, 1)
+                }
+                let x = v.minX + o[0] + Double(col) * pitch
+                let top = v.maxY - o[1] - Double(row) * pitch
+                rects.append(NSRect(x: x, y: top - Double(h) * pitch, width: Double(w) * pitch, height: Double(h) * pitch))
+            }
+        }
+        return (origins, rects)
+    }
+
+    /// Positions along one axis: every step of `pitch` from `ref` that keeps a span of
+    /// `len` between `lo` and `hi`.
+    private static func lattice(_ ref: CGFloat, len: CGFloat, lo: CGFloat, hi: CGFloat) -> [CGFloat] {
+        guard hi - lo >= len - 0.5 else { return [lo] }
+        let first = ref + ((lo - ref) / pitch).rounded(.up) * pitch
+        return stride(from: first, through: hi - len + 0.5, by: pitch).map { $0 }
     }
 
     /// Nearest free slot for this widget size to `frame`'s origin on the given screen.
+    /// Native widgets snap to whichever screen edge they're near (16pt in) and to each other,
+    /// not to one grid from the top-left, so the slots follow every edge and every native group.
     static func snappedFrame(near frame: NSRect, size s: WidgetSize, on screen: NSScreen) -> NSRect {
         let v = screen.visibleFrame
-        let (cols, rows) = dims(v)
-        let taken = occupied(visibleSize: v.size)
+        let o = outer(s)
+        let (origins, taken) = nativeLayout(in: v)
+        let lo = (x: v.minX + margin, y: v.minY + margin), hi = (x: v.maxX - margin, y: v.maxY - margin)
+
+        // Reference left edges and top edges (AppKit y, so a top edge is a maxY).
+        var xRefs: [CGFloat] = [lo.x, hi.x - o.width]
+        var topRefs: [CGFloat] = [hi.y, lo.y + o.height]
+        for g in origins { xRefs.append(v.minX + g.x); topRefs.append(v.maxY - g.y) }
+
+        var xs = Set<CGFloat>(), ys = Set<CGFloat>()
+        for r in xRefs { xs.formUnion(lattice(r, len: o.width, lo: lo.x, hi: hi.x)) }
+        for r in topRefs { ys.formUnion(lattice(r - o.height, len: o.height, lo: lo.y, hi: hi.y)) }
+
         var best: (NSRect, CGFloat, Bool)?
-        for col in 0...max(cols - s.cols, 0) {
-            for row in 0...max(rows - s.rows, 0) {
-                let f = Grid.frame(for: Cell(col: col, row: row), size: s, in: v)
-                let free = !(0..<s.cols).contains { x in (0..<s.rows).contains { y in taken.contains(Cell(col: col + x, row: row + y)) } }
+        for x in xs {
+            for y in ys {
+                let f = NSRect(x: x.rounded(), y: y.rounded(), width: o.width, height: o.height)
+                let free = !taken.contains { $0.intersects(f.insetBy(dx: 1, dy: 1)) }
                 let d = hypot(f.minX - frame.minX, f.minY - frame.minY)
                 if let b = best {
                     // Prefer free slots; among equals, prefer nearest.
@@ -1507,6 +1592,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         guard t != themeCache else { return }
         themeCache = t
         NSApp.appearance = t == 1 ? NSAppearance(named: .aqua) : t == 2 ? NSAppearance(named: .darkAqua) : nil
+        MainActor.assumeIsolated { menuBar?.applyTheme() }
     }
     var glass: NSGlassEffectView!
     var hosting: NSView!
@@ -1566,6 +1652,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if window.ignoresMouseEvents == inside { window.ignoresMouseEvents = !inside }
     }
 
+    /// "Desktop widget" setting (the X can hide it). If both the widget and the menu bar
+    /// gauge end up off, the app would be invisible, so bring the widget back.
+    func syncWidgetVisibility() {
+        guard let window else { return }
+        let d = UserDefaults.standard
+        var show = d.object(forKey: "showWidget") as? Bool ?? true
+        if !show && !(d.object(forKey: "menuBar") as? Bool ?? true) {
+            d.set(true, forKey: "showWidget")
+            show = true
+        }
+        if show && !window.isVisible { window.orderFrontRegardless() }
+        if !show && window.isVisible { window.orderOut(nil) }
+    }
+
     func applicationDidFinishLaunching(_ note: Notification) {
         UNUserNotificationCenter.current().delegate = self
         applyTheme()
@@ -1574,6 +1674,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             guard let self else { return }
             self.applyTheme()
             self.updateFocus()
+            self.syncWidgetVisibility()
             // Resize direction changed: keep the widget where it is, re-anchor the window around it.
             let a = self.anchors
             if let c = self.anchorCache, c != (a.right, a.bottom), self.window != nil { self.place(self.widgetFrame) }
@@ -1611,15 +1712,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         anchorCache = (anchors.right, anchors.bottom)
 
         let screen = NSScreen.main ?? NSScreen.screens[0]
-        var start = Grid.frame(for: Grid.Cell(col: Grid.dims(screen.visibleFrame).cols - size.cols, row: 0),
-                               size: size, in: screen.visibleFrame)
+        var start = Grid.topRight(size: size, in: screen.visibleFrame)
         if let saved = UserDefaults.standard.string(forKey: "widgetOrigin") {
             start.origin = NSPointFromString(saved)
         }
         place(start)
         snap(animated: false)
         window.onDragEnd = { [weak self] in self?.snap(animated: true) }
-        window.orderFrontRegardless()
+        syncWidgetVisibility()
 
         NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDown, .rightMouseDown]) { [weak self] _ in
             self?.updateMousePassThrough()
@@ -1649,6 +1749,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             let pop = WidgetView(store: store, forceLarge: true,
                                  onLevelChange: { [weak self] onTop in self?.applyLevel(onTop) },
                                  onSizeChange: { _ in })
+                // The popover's own glass lets whatever's behind it wash out the text,
+                // so give the content a near-solid backing (adapts to light/dark).
+                .background(Rectangle().fill(.background.opacity(0.9)).ignoresSafeArea())
             let host = NSHostingController(rootView: pop)
             host.preferredContentSize = NSSize(width: Grid.widgetSize(2), height: Grid.widgetSize(2))
             menuBar = MenuBarController(store: store, content: host)

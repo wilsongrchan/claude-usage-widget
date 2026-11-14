@@ -251,6 +251,11 @@ func resetText(_ date: Date?, now: Date) -> String {
     return "resets in \(max(m, 1))m"
 }
 
+/// The 5-hour session has no reset time until the first message starts it.
+func sessionResetText(_ date: Date?, now: Date) -> String {
+    date == nil ? "starts when you use Claude" : resetText(date, now: now)
+}
+
 /// "just now", "3m ago", "2h ago"
 func ageText(_ d: Date?, now: Date) -> String? {
     guard let d else { return nil }
@@ -902,7 +907,7 @@ struct WidgetView: View {
                 RingGauge(percent: session, elapsed: sElapsed, slices: segmentedRings ? uniformSlices(5) : [0, 1],
                           showMarker: showPaceMarker, label: "Session", match: ("session", rings))
                     .help("Each slice is one hour of the 5-hour session. The white tick marks now.")
-                Text(resetText(sReset, now: store.now)).caption()
+                Text(sessionResetText(sReset, now: store.now)).caption()
                 // Left-aligned together, icons on one centre line.
                 VStack(alignment: .leading, spacing: 5) {
                     PaceNote(percent: session, elapsed: sElapsed)
@@ -1022,12 +1027,12 @@ struct WidgetView: View {
             Spacer(minLength: 0)
             HStack(spacing: 2) {
                 SessionResetGlyph().scaleEffect(0.62).frame(width: 10, height: 10)
-                Text(compactReset(sReset))
+                Text(sReset == nil ? "starts on use" : compactReset(sReset))
             }
             .font(.system(size: 10, weight: .medium))
             .monospacedDigit()
             .foregroundStyle(dimmedNow ? AnyShapeStyle(Color.white.opacity(0.85)) : AnyShapeStyle(.secondary))
-            .help(resetText(sReset, now: store.now).capitalized(with: nil) + " (5-hour session)")
+            .help(sReset == nil ? "The 5-hour session starts with your next message" : resetText(sReset, now: store.now).capitalized(with: nil) + " (5-hour session)")
         }
         .font(.system(size: 10))
     }
@@ -1157,11 +1162,12 @@ struct WidgetView: View {
                     .textCase(.uppercase)
                     .tracking(0.9)
                     .foregroundStyle(.secondary)
-                Text(compactReset(reset))
+                Text(reset == nil && title == "Session" ? "starts when\nyou use Claude" : compactReset(reset))
                     .font(.system(size: 11, weight: .medium))
                     .monospacedDigit()
                     .foregroundStyle(dimmedNow ? AnyShapeStyle(Color.white.opacity(0.85)) : AnyShapeStyle(.secondary))
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                 if forecast != nil {
                     ForecastNote(hit: forecast, now: store.now, stacked: true)
                 } else {

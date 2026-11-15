@@ -57,9 +57,9 @@ No account, no server, no tracking. It uses your Claude Code login **only** to a
 
 **Unofficial app.** Claude Usage is an independent, unofficial project. It is not made by, affiliated with, or endorsed by Anthropic. "Claude" and "Anthropic" are trademarks of Anthropic, PBC, used here only to describe what the app shows.
 
-**Your data stays on this Mac.** There is no server of ours, no account, no analytics and no tracking. The app reads your existing Claude Code login from the macOS Keychain and uses it only to ask Anthropic's own API (`api.anthropic.com`) for your usage. The login token is never saved, logged or sent anywhere else.
+**Your data stays on this Mac.** There is no server of ours, no account, no analytics and no tracking. The app reads your existing Claude Code login from the macOS Keychain and uses it only to ask Anthropic's own API (`api.anthropic.com`) for your usage. The login token is never saved, logged or sent anywhere else. Separately, once a day it asks GitHub whether a newer version is out; that request carries no personal data, and you can turn it off in Alerts.
 
-**What's stored locally.** Your settings, saved-reset count and expiry, and today's hourly usage are kept in this Mac's app preferences. Nothing leaves your Mac except that one usage request to Anthropic.
+**What's stored locally.** Your settings, saved-reset count and expiry, and today's hourly usage are kept in this Mac's app preferences. Nothing leaves your Mac except that usage request to Anthropic and the daily update check with GitHub.
 
 **Accuracy.** Usage comes from an undocumented Anthropic endpoint that may change or stop working. Forecasts are estimates. Check Settings → Usage on claude.ai for the official figures.
 

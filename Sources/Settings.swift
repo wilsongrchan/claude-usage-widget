@@ -562,6 +562,7 @@ struct AlertsPanel: View {
     @AppStorage("sessionResetAlert") var sessionResetAlert = true
     @AppStorage("resetReminders") var resetReminders = true
     @AppStorage("resetCount") var resetCount = 0
+    @AppStorage(UpdateChecker.enabledKey) var checkUpdates = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -578,6 +579,12 @@ struct AlertsPanel: View {
                     ReminderEditor(compact: compact)
                     NavRow(title: "Saved resets", subtitle: resetCount > 0 ? "\(resetCount) saved" : "None tracked",
                            action: { nav.push(.resets) }) { SessionResetGlyph().scaleEffect(0.85) }
+                    // Off = no daily GitHub check at all (About can still check by hand).
+                    SettingToggle(title: "Update notifications", isOn: Binding(
+                        get: { checkUpdates }, set: { v in
+                            checkUpdates = v
+                            if v { UpdateChecker.shared.checkIfDue() }
+                        })) { Image(systemName: "arrow.down.circle") }
                 }
                 .padding(.bottom, 2)
             }
@@ -1016,12 +1023,14 @@ struct AboutPanel: View {
             if showHeader { PanelHeader(title: compact ? "About" : "About & privacy", onBack: nav.pop) }
             ScrollView(showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 12) {
+                    VersionSection(compact: compact)
+                    Divider().padding(.vertical, 2)
                     section("Unofficial app", icon: "exclamationmark.shield",
                             "Claude Usage is an independent, unofficial project. It is not made by, affiliated with, or endorsed by Anthropic. \"Claude\" and \"Anthropic\" are trademarks of Anthropic, PBC, used here only to describe what the app shows.")
                     section("Your data stays on this Mac", icon: "lock",
-                            "There is no server of ours, no account, no analytics and no tracking. The app reads your existing Claude Code login from the macOS Keychain and uses it only to ask Anthropic's own API (api.anthropic.com) for your usage. The login token is never saved, logged or sent anywhere else.")
+                            "There is no server of ours, no account, no analytics and no tracking. The app reads your existing Claude Code login from the macOS Keychain and uses it only to ask Anthropic's own API (api.anthropic.com) for your usage. The login token is never saved, logged or sent anywhere else. Separately, once a day it asks GitHub whether a newer version is out; that request carries no personal data, and you can turn it off in Alerts.")
                     section("What's stored locally", icon: "internaldrive",
-                            "Your settings, saved-reset count and expiry, and today's hourly usage are kept in this Mac's app preferences. Nothing leaves your Mac except that one usage request to Anthropic.")
+                            "Your settings, saved-reset count and expiry, and today's hourly usage are kept in this Mac's app preferences. Nothing leaves your Mac except that usage request to Anthropic and the daily update check with GitHub.")
                     section("Accuracy", icon: "info.circle",
                             "Usage comes from an undocumented Anthropic endpoint that may change or stop working. Forecasts are estimates. Check Settings → Usage on claude.ai for the official figures.")
                     section("No warranty", icon: "doc.text",

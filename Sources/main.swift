@@ -178,7 +178,7 @@ final class UsageStore: ObservableObject {
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue("claude-usage-widget/0.1.0", forHTTPHeaderField: "User-Agent")
+        req.setValue("claude-usage-widget/\(AppInfo.version)", forHTTPHeaderField: "User-Agent")
         req.timeoutInterval = 20
         // A fresh session per poll: the shared one can keep reusing a connection that died
         // across sleep or a network change, so every request silently times out forever.
@@ -1141,6 +1141,7 @@ struct WidgetView: View {
                         .font(.system(size: 13, weight: .semibold))
                         .lineLimit(1)
                         .fixedSize()
+                        .overlay(alignment: .topTrailing) { UpdateDot().offset(x: 16.5, y: -9.5) }
                 }
                 .matchedGeometryEffect(id: "brand", in: rings)
                 // One reserved status line so the rings never shift.
@@ -1298,6 +1299,7 @@ struct WidgetView: View {
                         .frame(width: 15, height: 15)
                     Text("Claude Usage")
                         .font(.system(size: 13, weight: .semibold))
+                        .overlay(alignment: .topTrailing) { UpdateDot().offset(x: 16.5, y: -9.5) }
                     if store.loading { ProgressView().controlSize(.mini) }
                 }
                 .matchedGeometryEffect(id: "brand", in: rings)
@@ -1760,6 +1762,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             host.preferredContentSize = NSSize(width: Grid.widgetSize(2), height: Grid.widgetSize(2))
             menuBar = MenuBarController(store: store, content: host)
             store.start()
+            UpdateChecker.shared.start()
         }
     }
 

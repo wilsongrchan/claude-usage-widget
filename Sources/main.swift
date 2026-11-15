@@ -1178,13 +1178,17 @@ struct WidgetView: View {
         }
         .zIndex(1)   // keep the hover labels above the rings
         Spacer(minLength: 4)
-        HStack(spacing: 6) {
+        // Each block hugs its content and the spare width is shared equally (left edge, between,
+        // right edge), so the pair sits centred instead of leaving a gap on the right.
+        HStack(spacing: 0) {
+            Spacer(minLength: 0)
             mediumBlock(title: "Session", percent: session, elapsed: sElapsed, reset: sReset,
                         slices: segmentedRings ? uniformSlices(5) : [0, 1], current: nil,
                         forecast: showForecast && aheadOfPace(session, sElapsed)
                             ? Forecast.hitTime(util: session, resetsAt: sReset, duration: 5 * 3600,
                                                now: store.now, useRecent: true) : nil)
                 .help("Each slice is one hour of the 5-hour session. The white tick marks now.")
+            Spacer(minLength: 6)
             mediumBlock(title: "Weekly", percent: weekly, elapsed: wElapsed, reset: wReset,
                         slices: segmentedRings ? (budget?.boundaries ?? uniformSlices(7)) : [0, 1],
                         current: budget?.current,
@@ -1192,6 +1196,7 @@ struct WidgetView: View {
                             ? Forecast.hitTime(util: weekly, resetsAt: wReset, duration: 7 * 86400,
                                                now: store.now, useRecent: false) : nil)
                 .help("Each slice is one day's budget. The white tick marks where you should be by now.")
+            Spacer(minLength: 0)
         }
         Spacer(minLength: 4)
         if let l = scoped.first {
@@ -1237,9 +1242,8 @@ struct WidgetView: View {
                     PaceNote(percent: percent, elapsed: elapsed, stacked: true)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize()   // natural width, so the row can centre the pair
         }
-        .frame(maxWidth: .infinity)
     }
 
     func open(_ p: Panel) {

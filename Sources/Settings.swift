@@ -380,7 +380,7 @@ struct AppearancePanel: View {
                      active: segmentedRings, glyph: AnyView(SegmentGlyph()), action: { segmentedRings.toggle() }),
             TileSpec(id: "split", help: "Weekly ring slices: \(splitNames[weeklySplit]). Tap for \(splitNames[(weeklySplit + 1) % 3]).",
                      active: true, glyph: splitGlyphs[weeklySplit], action: { weeklySplit = (weeklySplit + 1) % 3 }),
-            TileSpec(id: "fable", help: "Fable usage bar: \(onOff(showScoped)). Shown in the medium and large widgets.",
+            TileSpec(id: "fable", help: "Model limit bar: \(onOff(showScoped)). Shown in the medium and large widgets.",
                      active: showScoped, glyph: AnyView(Image(systemName: "chart.bar.fill")), action: { showScoped.toggle() }),
             TileSpec(id: "paceNote", help: "Pace note: \(onOff(showPaceNote)). \"On pace\", \"12% to spare\" and so on.",
                      active: showPaceNote, glyph: AnyView(Image(systemName: "checkmark.circle")), action: { showPaceNote.toggle() }),
@@ -460,7 +460,7 @@ struct AppearancePanel: View {
                         }
                     }
                     .opacity(segmentedRings ? 1 : 0.5)
-                    SettingToggle(title: "Fable usage bar", isOn: $showScoped) { Image(systemName: "chart.bar.fill") }
+                    SettingToggle(title: "Model limit bar", isOn: $showScoped) { Image(systemName: "chart.bar.fill") }
 
                     SectionLabel(text: "Notes")
                     SettingToggle(title: "Pace note", isOn: $showPaceNote) { Image(systemName: "checkmark.circle") }
@@ -929,7 +929,7 @@ struct ResetPanel: View {
     let nav: Nav
 
     @AppStorage("resetCount") var count = 0
-    @AppStorage("resetExpiry") var expiry: Double = ResetReminder.defaultExpiry
+    @AppStorage("resetExpiry") var expiry: Double = 0   // 0 = not set
 
     var body: some View {
         let remaining = expiry - now.timeIntervalSince1970
@@ -956,7 +956,17 @@ struct ResetPanel: View {
                         .datePickerStyle(.field)
                         .labelsHidden()
                         .controlSize(.small)
-                    if compact {
+                    if expiry <= 0 {
+                        // No expiry until you set one; the picker then starts 30 days out.
+                        HStack {
+                            Text("Expires").font(.system(size: 12))
+                            Spacer()
+                            PillButton(title: "Set expiry") {
+                                expiry = Date().addingTimeInterval(30 * 86400).timeIntervalSince1970
+                                ResetReminder.check()
+                            }
+                        }
+                    } else if compact {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Expires").font(.system(size: 12))
                             picker
@@ -969,7 +979,11 @@ struct ResetPanel: View {
                         }
                     }
 
-                    if count > 0 {
+                    if count > 0 && expiry <= 0 {
+                        Text("No reminders until you set an expiry.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    } else if count > 0 {
                         Text(remaining > 0 ? "Expires in \(ResetReminder.remainingText(remaining))" : "Expired")
                             .font(.system(size: 11, weight: .semibold))
                             .monospacedDigit()
@@ -1039,7 +1053,7 @@ struct AboutPanel: View {
                             "To the fullest extent permitted by law, the authors are not liable for any loss or damage arising from using this app, including: inaccurate, delayed or missing usage figures or forecasts; missed, late or incorrect alerts and reminders; reaching or exceeding Claude usage limits; unused or expired saved resets; lost work, data or settings; or any charges, restrictions or account issues with Anthropic. You use it entirely at your own risk.")
                     Divider().padding(.vertical, 2)
                     HStack {
-                        PillButton(title: "Refresh") { Task { await store?.refresh() } }
+                        PillButton(title: "Refresh") { Task { await store?.refresh(userInitiated: true) } }
                         Spacer()
                         PillButton(title: "Quit") { NSApp.terminate(nil) }
                     }

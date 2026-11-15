@@ -106,18 +106,7 @@ final class UpdateChecker: ObservableObject {
         return (tag.hasPrefix("v") ? String(tag.dropFirst()) : tag, url)
     }
 
-    /// "0.2.0" > "0.1.10" > "0.1.9"; missing parts count as 0.
-    nonisolated static func isNewer(_ a: String, than b: String) -> Bool {
-        func parts(_ s: String) -> [Int] {
-            s.split(whereSeparator: { $0 == "." || $0 == "-" }).map { Int($0) ?? 0 }
-        }
-        let x = parts(a), y = parts(b)
-        for i in 0..<max(x.count, y.count) {
-            let p = i < x.count ? x[i] : 0, q = i < y.count ? y[i] : 0
-            if p != q { return p > q }
-        }
-        return false
-    }
+    nonisolated static func isNewer(_ a: String, than b: String) -> Bool { isNewerVersion(a, than: b) }
 }
 
 /// Orange "!" on the wordmark's top-right when a new version is out; click to download or skip.

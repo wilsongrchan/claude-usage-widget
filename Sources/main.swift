@@ -313,10 +313,12 @@ struct RingGauge: View {
                     let a = slices[k] + gap
                     let b = slices[k + 1] - gap
                     if b > a {   // zero-budget days (e.g. weekends in Weekdays mode) are skipped
-                        // Track — the current slice is highlighted.
+                        // Track. Without the pace marker, the current slice (this hour / today)
+                        // is shaded darker so you can still see where you are; with the marker
+                        // that's redundant, so all slices match.
                         Circle()
                             .trim(from: a, to: b)
-                            .stroke(Palette.claude.opacity(segmented && k == today ? 0.32 : 0.16),
+                            .stroke(Palette.claude.opacity(segmented && !showMarker && k == today ? 0.42 : 0.16),
                                     style: StrokeStyle(lineWidth: lineWidth, lineCap: segmented ? .butt : .round))
                         // Fill
                         if p > a {

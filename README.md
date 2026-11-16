@@ -11,7 +11,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/features-dark.png">
-  <img src="docs/images/features-light.png" width="420" align="right" alt="Widget sizes with callouts: medium, small, run-out forecast, monochrome, session and weekly ring slices, pace marker, pace note, saved resets">
+  <img src="docs/images/features-light.png" width="420" align="right" alt="Widget sizes with callouts: medium, small, monochrome, run-out forecast, session and weekly ring slices, pace marker, pace note, model limit bar, saved resets">
 </picture>
 
 - **Run-out forecast**: know when you'll hit a limit at your current pace
@@ -20,7 +20,7 @@
 - **Today by the hour**: see when you use Claude most
 - **Menu bar gauge**: your usage at a glance
 - **Three sizes**: small, medium and large
-- **Feels native**: Liquid Glass, light and dark, and it fades like real widgets<br><img src="docs/images/desktop-menubar.png" width="362" alt="Medium widget alongside native macOS widgets, and the menu bar gauge with its popover">
+- **Feels native**: Liquid Glass, light and dark, and it fades like real widgets<br><img src="docs/images/desktop-menubar.png" width="350" alt="Medium widget alongside native macOS widgets, and the menu bar gauge with its popover">
 
 ## Install
 
@@ -63,7 +63,8 @@ The [script](install.sh) only downloads the same ClaudeUsage.zip as the link bel
 Hover over the widget for its five buttons: refresh, the two other sizes, the **gear** for Settings and the X. Or right-click it (or the menu bar gauge) for the same things in a menu. Settings open at large size, whatever size the widget is, and it goes back when you're done: Rings (pace marker, slices, weekly budget, notes), Widget (theme, color style, size), Alerts, Data and About.
 
 <p align="center">
-  <img src="docs/images/settings-appearance.png" width="200" alt="Widget settings">
+  <img src="docs/images/settings-rings.png" width="200" alt="Rings settings: pace marker, segmented rings, weekly ring slices, notes">
+  <img src="docs/images/settings-widget.png" width="200" alt="Widget settings: theme, color style, size, resize direction">
   <img src="docs/images/settings-alerts.png" width="200" alt="Alert settings">
   <img src="docs/images/settings-data.png" width="200" alt="Today by the hour">
 </p>

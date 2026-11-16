@@ -44,7 +44,7 @@ The [script](install.sh) only downloads the same ClaudeUsage.zip as the link bel
 <details>
 <summary>Prefer Terminal for step 2? Wondering what to click on the Keychain prompt?</summary>
 
-- **Skip steps 1–3:** after dragging the app into Applications, run `xattr -dr com.apple.quarantine /Applications/ClaudeUsage.app`, then open it normally.
+- **Skip steps 1–3:** after dragging the app into Applications, run `xattr -dr com.apple.quarantine "/Applications/Claude Usage.app"`, then open it normally.
 - **Keychain prompt:** macOS asks whether "security" may use **"Claude Code-credentials"**. That's how the app reads your Claude Code login. **Always Allow** stops macOS asking again, but it also lets other software on this Mac read that login through the same system tool. **Allow** asks again each time the app re-reads the login (at launch, and when Claude Code renews its login).
 
 </details>
@@ -53,7 +53,7 @@ The [script](install.sh) only downloads the same ClaudeUsage.zip as the link bel
 <summary>Uninstall</summary>
 
 1. Quit it: the X on the widget → **Quit Claude Usage** (or Settings → About → Quit).
-2. Drag **ClaudeUsage.app** from Applications to the **Trash**. Turn off Open at Login first if you had it on.
+2. Drag **Claude Usage** from Applications to the **Trash**. Turn off Open at Login first if you had it on.
 3. Optional, to remove its settings too: `defaults delete local.claude-usage-widget`
 
 </details>
@@ -98,7 +98,7 @@ No account, no server, no tracking. It uses your Claude Code login **only** to a
 | *Keychain access denied* | You clicked Deny on the Keychain prompt. Press ↻ and choose **Allow** or **Always Allow** this time |
 | *Login expired* | Use Claude Code once; the widget picks up the new login by itself |
 | *Updates paused · retrying…* | Anthropic asked the widget to slow down. Your last numbers stay on screen and it retries on its own |
-| No notifications | System Settings → Notifications → ClaudeUsage → allow |
+| No notifications | System Settings → Notifications → Claude Usage → allow |
 
 </details>
 

@@ -18,11 +18,11 @@ WHAT YOU NEED
 
 INSTALL
 -------
-1. Drag "ClaudeUsage.app" into your Applications folder, then open it.
+1. Drag "Claude Usage" into your Applications folder, then open it.
    macOS says Apple could not verify it. Click "Done".
 
 2. Open System Settings → Privacy & Security, scroll down and click
-   "Open Anyway" next to the ClaudeUsage message.
+   "Open Anyway" next to the Claude Usage message.
 
 3. Click "Open Anyway" again and enter your password or use Touch ID.
    You only do this once.
@@ -43,7 +43,7 @@ The widget appears on your desktop. Drag it where you like. It snaps to the
 same grid as your other desktop widgets.
 
 Prefer Terminal for steps 1 to 3? After dragging the app into Applications:
-   xattr -dr com.apple.quarantine /Applications/ClaudeUsage.app
+   xattr -dr com.apple.quarantine "/Applications/Claude Usage.app"
 then open it normally.
 
 Or install and update in one line, without the warning at all:
@@ -78,7 +78,7 @@ TROUBLESHOOTING
   login, and the widget picks it up automatically.
 - "Updates paused · retrying…": Anthropic asked the widget to slow down
   for a moment. It keeps showing your last numbers and retries by itself.
-- No notifications: System Settings → Notifications → ClaudeUsage →
+- No notifications: System Settings → Notifications → Claude Usage →
   turn on "Allow notifications".
 
 
@@ -86,7 +86,7 @@ UNINSTALL
 ---------
 1. Quit it: the X on the widget → Quit Claude Usage (or the gear →
    About → Quit). Turn off Open at Login first if you had it on.
-2. Drag ClaudeUsage.app from Applications to the Trash.
+2. Drag Claude Usage from Applications to the Trash.
 3. Optional, to remove its settings too, run in Terminal:
    defaults delete local.claude-usage-widget
 

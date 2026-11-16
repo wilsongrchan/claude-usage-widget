@@ -22,7 +22,7 @@ jobs:
         run: VERSION="${GITHUB_REF_NAME#v}" ./build.sh dist
       - name: Check the version
         run: |
-          built=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" build/ClaudeUsage.app/Contents/Info.plist)
+          built=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "build/Claude Usage.app/Contents/Info.plist")
           [[ "$built" == "${GITHUB_REF_NAME#v}" ]] || { echo "Built $built, tag is $GITHUB_REF_NAME"; exit 1; }
       - name: Publish
         env:

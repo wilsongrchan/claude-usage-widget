@@ -1689,7 +1689,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     //
     // The window is always large-widget sized, and the glass sits inside it at the corner chosen in
     // Resize direction. Changing size then only animates the glass: resizing a transparent window
-    // makes macOS redraw it from scratch, which flashes. Clicks on the empty part pass through.
+    // makes macOS redraw it from scratch, which flashes. Clicks on the empty, fully transparent
+    // part pass through on their own (macOS hit-tests transparent pixels; tested on macOS 26),
+    // so no mouse monitoring is needed.
 
     static let windowSize = Grid.outer(.large)
     private var anchorCache: (Bool, Bool)?
@@ -1728,14 +1730,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         window.setFrame(win, display: false)
         glass.frame = glassFrame(for: w, in: win)
         CATransaction.commit()
-        updateMousePassThrough()
-    }
-
-    /// Only the glass takes clicks; the rest of the window lets them through to whatever is below.
-    func updateMousePassThrough() {
-        guard window != nil, glass != nil else { return }
-        let inside = widgetFrame.insetBy(dx: Grid.inset, dy: Grid.inset).contains(NSEvent.mouseLocation)
-        if window.ignoresMouseEvents == inside { window.ignoresMouseEvents = !inside }
     }
 
     /// "Desktop widget" setting (the X can hide it). If both the widget and the menu bar
@@ -1813,13 +1807,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
         syncWidgetVisibility()
 
-        NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            self?.updateMousePassThrough()
-        }
-        NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved]) { [weak self] e in
-            self?.updateMousePassThrough()
-            return e
-        }
 
         // Fade/unfade as the user moves between apps and the desktop, like native widgets.
         updateFocus()
@@ -1878,7 +1865,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 ctx.duration = 0.25
                 ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
                 window.animator().setFrame(win, display: true)
-            }, completionHandler: { [weak self] in self?.updateMousePassThrough() })
+            })
         } else {
             place(target)
         }
@@ -1912,7 +1899,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             ctx.allowsImplicitAnimation = true
             glass.animator().frame = glassFrame(for: target, in: win)
         }, completionHandler: { [weak self] in
-            self?.updateMousePassThrough()
             Grid.refreshPlacement { self?.resnapIfCovered() }   // the new size may overlap a native widget
         })
     }

@@ -1,8 +1,13 @@
 # Releasing
 
 Releases are built by GitHub Actions (`.github/workflows/release.yml`) on the `macos-26`
-runner with Xcode 26.6. Pushing a tag that starts with `v` builds `dist/ClaudeUsage.zip`
-with that version and attaches it to the GitHub release of the same name.
+runner with its default Xcode. Pushing a tag that starts with `v` builds
+`dist/ClaudeUsage.zip` with that version and attaches it to the GitHub release of the same
+name.
+
+**A normal release always gets a new, higher version number.** The in-app update check
+compares the app's version with the latest release's tag, so re-using a number means people
+who already have it are never told about the new build.
 
 ## A new version
 
@@ -18,10 +23,11 @@ with that version and attaches it to the GitHub release of the same name.
    the app's version matches the tag, and creates the release with generated notes and
    `ClaudeUsage.zip` attached. Edit the notes on GitHub afterwards if you like.
 
-The in-app update check compares the app's version with the latest release's tag, so every
-release needs a higher version number than the last.
+## Emergency only: replacing the zip of an existing release
 
-## Replacing the zip of an existing release
+Only for a broken upload (a bad zip, a build mistake), never to ship changes: anyone who
+already downloaded that version won't be told about the replacement. (Before the first public
+announcement, v0.1.0 was rebuilt this way while it had no users yet.)
 
 Move the tag and force-push it. The workflow sees the release already exists and only
 replaces `ClaudeUsage.zip`; the notes are left alone.

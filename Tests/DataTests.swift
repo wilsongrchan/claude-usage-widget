@@ -62,12 +62,21 @@ func testCredentials() {
         expect(Credentials.parse(Data("garbage".utf8)) == nil)
     }
 
-    suite("Credentials.expiresSoon") {
-        let now = Date()
-        expect(Credentials(token: "a", expiresAt: now.addingTimeInterval(30)).expiresSoon(now: now))
-        expect(Credentials(token: "a", expiresAt: now.addingTimeInterval(-5)).expiresSoon(now: now))
-        expect(!Credentials(token: "a", expiresAt: now.addingTimeInterval(3600)).expiresSoon(now: now))
-        expect(!Credentials(token: "a", expiresAt: nil).expiresSoon(now: now), "unknown expiry counts as fine")
+    suite("Credentials.parseStamp") {
+        let out = """
+        keychain: "/Users/x/Library/Keychains/login.keychain-db"
+        attributes:
+            "acct"<blob>="x"
+            "cdat"<timedate>=0x32303236303731343137323430355A00  "20260714172405Z\\000"
+            "mdat"<timedate>=0x32303236313131363032303333325A00  "20261116020332Z\\000"
+            "svce"<blob>="Claude Code-credentials"
+        """
+        let s = Credentials.parseStamp(out)
+        expect(s?.contains("20260714172405Z") == true && s?.contains("20261116020332Z") == true, "both dates: \(s ?? "nil")")
+        expect(s?.contains("acct") == false, "nothing else")
+        let changed = Credentials.parseStamp(out.replacingOccurrences(of: "20261116020332Z", with: "20261116090000Z"))
+        expect(changed != s, "a new mdat is a new stamp")
+        expect(Credentials.parseStamp("garbage") == nil)
     }
 
     suite("Problem messages") {
@@ -137,6 +146,78 @@ func testHourlyLog() {
             expect(d.object(forKey: HourlyLog.key(today)) != nil, "today kept")
             expect(d.object(forKey: HourlyLog.key(cal.date(byAdding: .day, value: -7, to: today)!)) == nil,
                    "8th day back removed")
+        }
+    }
+}
+
+func testLoginPlan() {
+    let now = date(2026, 11, 16, 12)
+    let valid = Credentials(token: "a", expiresAt: now.addingTimeInterval(3600))
+    let expired = Credentials(token: "a", expiresAt: now.addingTimeInterval(-60))
+    var stampCalls = 0
+    func stamp(_ s: String?) -> () -> String? { { stampCalls += 1; return s } }
+
+    suite("LoginPlan: when to read the secret") {
+        expectEqual(LoginPlan.decide(cached: nil, cachedStamp: nil, rejected: false, userInitiated: false,
+                                     now: now, currentStamp: stamp("s1")), .readSecret, "nothing in memory")
+        stampCalls = 0
+        expectEqual(LoginPlan.decide(cached: valid, cachedStamp: "s1", rejected: false, userInitiated: false,
+                                     now: now, currentStamp: stamp("s1")), .useCached)
+        expectEqual(stampCalls, 0, "a good login in memory doesn't touch the Keychain at all")
+        expectEqual(LoginPlan.decide(cached: valid, cachedStamp: "s1", rejected: false, userInitiated: true,
+                                     now: now, currentStamp: stamp("s1")), .readSecret, "Refresh always re-reads")
+        expect(LoginPlan.decide(cached: Credentials(token: "a", expiresAt: nil), cachedStamp: "s1", rejected: false,
+                                userInitiated: false, now: now, currentStamp: stamp("s1")) == .useCached,
+               "unknown expiry counts as fine")
+    }
+
+    suite("LoginPlan: expired or rejected login") {
+        expectEqual(LoginPlan.decide(cached: expired, cachedStamp: "s1", rejected: false, userInitiated: false,
+                                     now: now, currentStamp: stamp("s1")), .expired, "unchanged item: no read, no API call")
+        expectEqual(LoginPlan.decide(cached: expired, cachedStamp: "s1", rejected: false, userInitiated: false,
+                                     now: now, currentStamp: stamp("s2")), .readSecret, "Claude Code wrote a new login")
+        expectEqual(LoginPlan.decide(cached: valid, cachedStamp: "s1", rejected: true, userInitiated: false,
+                                     now: now, currentStamp: stamp("s1")), .expired, "rejected and unchanged")
+        expectEqual(LoginPlan.decide(cached: valid, cachedStamp: "s1", rejected: true, userInitiated: false,
+                                     now: now, currentStamp: stamp("s2")), .readSecret, "rejected, then renewed")
+        expectEqual(LoginPlan.decide(cached: expired, cachedStamp: "s1", rejected: false, userInitiated: false,
+                                     now: now, currentStamp: stamp(nil)), .expired, "can't tell: don't prompt")
+    }
+
+    suite("LoginPlan: an expired login left alone for 30 minutes") {
+        // One poll a minute. The item doesn't change for 30 polls, then Claude Code renews it.
+        var reads = 0, apiCalls = 0
+        var item = "s1"
+        for minute in 0..<32 {
+            if minute == 30 { item = "s2" }
+            let t = now.addingTimeInterval(Double(minute) * 60)
+            switch LoginPlan.decide(cached: expired, cachedStamp: "s1", rejected: true, userInitiated: false,
+                                    now: t, currentStamp: { item }) {
+            case .readSecret: reads += 1
+            case .useCached: apiCalls += 1
+            case .expired: break
+            }
+            if minute == 29 { expectEqual(reads, 0, "no secret reads (no prompts) in 30 minutes") }
+            if minute == 30 { expectEqual(reads, 1, "recovers on the first poll after the renewal") }
+        }
+        expectEqual(apiCalls, 0, "no API calls with a login known to be expired")
+    }
+}
+
+func testReminderLog() {
+    suite("NotifiedLog keeps long-lead reminders until their expiry") {
+        withDefaults { d in
+            let now = date(2026, 11, 16)
+            let expiry = Int(now.addingTimeInterval(40 * 86400).timeIntervalSince1970)
+            let id = "notified-\(expiry)-\(30 * 86400)"   // 30-day lead, sent today
+            NotifiedLog.record([id], now: now, defaults: d)
+            NotifiedLog.prune(now: now.addingTimeInterval(20 * 86400), defaults: d)
+            expect(NotifiedLog.contains(id, defaults: d), "20 days later, before expiry: still remembered")
+            NotifiedLog.prune(now: now.addingTimeInterval(41 * 86400), defaults: d)
+            expect(!NotifiedLog.contains(id, defaults: d), "after the expiry: pruned")
+            NotifiedLog.record(["alert-x-1-80"], now: now, defaults: d)
+            NotifiedLog.prune(now: now.addingTimeInterval(15 * 86400), defaults: d)
+            expect(!NotifiedLog.contains("alert-x-1-80", defaults: d), "other records still go after 14 days")
         }
     }
 }

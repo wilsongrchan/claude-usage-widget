@@ -34,8 +34,8 @@ INSTALL
      Anthropic for your usage.
      "Always Allow" stops macOS asking again, but it also lets other
      software on this Mac read that login through the same system tool.
-     "Allow" asks again each time the app re-reads the login (at launch
-     and every few hours).
+     "Allow" asks again each time the app re-reads the login (at launch,
+     and when Claude Code renews its login).
    - Notifications, so your usage alerts can reach you.
    - Open at Login, to start it whenever you log in (also in Settings).
 
@@ -68,6 +68,8 @@ TROUBLESHOOTING
 ---------------
 - "Claude Code not found": install Claude Code and log in, then click
   refresh in the widget.
+- "Keychain access denied": you clicked Deny on the Keychain prompt.
+  Click refresh in the widget and choose "Allow" or "Always Allow".
 - "Login expired": open Claude Code and use it once. That refreshes the
   login, and the widget picks it up automatically.
 - "Updates paused · retrying…": Anthropic asked the widget to slow down

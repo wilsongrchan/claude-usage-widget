@@ -61,7 +61,8 @@ func gridLattice(_ ref: Double, len: Double, lo: Double, hi: Double, pitch: Doub
 // MARK: - Notifications already sent
 
 /// Which alerts and reminders have already gone out, so each fires once. One dictionary
-/// (`notifiedLog`: id → when it was recorded), pruned after 14 days.
+/// (`notifiedLog`: id → when it was recorded), pruned after 14 days. Saved-reset reminders
+/// (`notified-<expiry>-<lead>`) are kept until that expiry has passed, however long the lead.
 enum NotifiedLog {
     static let key = "notifiedLog"
     static let maxAge: TimeInterval = 14 * 86400
@@ -81,7 +82,11 @@ enum NotifiedLog {
     static func prune(now: Date, defaults d: UserDefaults = .standard) {
         guard var log = d.dictionary(forKey: key) else { return }
         let cutoff = now.timeIntervalSince1970 - maxAge
-        log = log.filter { (($1 as? Double) ?? 0) >= cutoff }
+        log = log.filter { id, recorded in
+            if ((recorded as? Double) ?? 0) >= cutoff { return true }
+            if id.hasPrefix("notified-"), let expiry = legacyTime(id) { return expiry >= now.timeIntervalSince1970 }
+            return false
+        }
         d.set(log, forKey: key)
     }
 

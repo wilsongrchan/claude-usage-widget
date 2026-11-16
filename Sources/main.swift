@@ -36,9 +36,12 @@ final class UsageStore: ObservableObject {
     private var pollTimer: Timer?
     private var clockTimer: Timer?
 
-    // The login lives in memory only. The Keychain is read again only when there's no token,
-    // it's about to expire, the API rejected it, or the user pressed Refresh.
+    // The login lives in memory only. The secret is read again only when there's no login in
+    // memory, the user pressed Refresh, or the login expired / was rejected AND Claude Code has
+    // written a new one since (seen from the Keychain item's dates, which never prompt). With
+    // plain "Allow" that keeps prompts to launch and Claude Code's own login renewals.
     private var credentials: Credentials?
+    private var credentialsStamp: String?
     /// The token the API rejected; until Claude Code writes a new one, polls skip the network.
     private var rejectedToken: String?
     /// After Deny on the Keychain prompt, don't ask again on every poll: wait for Refresh.
@@ -140,22 +143,17 @@ final class UsageStore: ObservableObject {
         defer { refreshing = false; loading = false; now = Date() }
 
         do {
-            var creds = try await currentCredentials(reread: userInitiated)
-            if let rejected = rejectedToken {
-                guard creds.token != rejected else { throw UsageProblem.loginExpired }   // still the old login
-                rejectedToken = nil
-            }
+            var readSecret = false   // never read the secret twice in one refresh
+            var creds = try await login(userInitiated: userInitiated, readSecret: &readSecret)
             let result: (Usage, Data)
             do {
                 result = try await Self.fetch(token: creds.token)
             } catch UsageProblem.loginExpired {
-                // Claude Code may have refreshed its login since we read it: re-read once, retry once.
-                let fresh = try await currentCredentials(reread: true)
-                guard fresh.token != creds.token else {
-                    rejectedToken = creds.token
-                    throw UsageProblem.loginExpired
-                }
-                creds = fresh
+                rejectedToken = creds.token
+                // Just read and still rejected: it really has expired. Otherwise Claude Code may
+                // have renewed it since we read it: retry once if (and only if) it wrote a new one.
+                guard !readSecret else { throw UsageProblem.loginExpired }
+                creds = try await login(userInitiated: false, readSecret: &readSecret)
                 result = try await Self.fetch(token: creds.token)
             }
             accept(result)
@@ -197,16 +195,40 @@ final class UsageStore: ObservableObject {
         if backoff != nil { backoff = nil; schedulePoll() }
     }
 
-    /// The in-memory login, re-read from the Keychain only when needed.
-    private func currentCredentials(reread: Bool) async throws -> Credentials {
-        if !reread, rejectedToken == nil, let c = credentials, !c.expiresSoon(now: Date()) { return c }
-        do {
-            let c = try await Task.detached { try Credentials.read() }.value
-            credentials = c
-            return c
-        } catch {
-            credentials = nil
-            throw error
+    /// The login to use for this refresh, following `LoginPlan`.
+    private func login(userInitiated: Bool, readSecret: inout Bool) async throws -> Credentials {
+        let cached = credentials, cachedStamp = credentialsStamp
+        let rejected = rejectedToken != nil && rejectedToken == cached?.token
+        let plan = await Task.detached {
+            LoginPlan.decide(cached: cached, cachedStamp: cachedStamp, rejected: rejected,
+                             userInitiated: userInitiated, now: Date(), currentStamp: { Credentials.stamp() })
+        }.value
+        switch plan {
+        case .useCached:
+            return cached!
+        case .expired:
+            throw UsageProblem.loginExpired
+        case .readSecret:
+            guard !readSecret else { throw UsageProblem.loginExpired }
+            readSecret = true
+            do {
+                // Stamp first: if Claude Code writes in between, the next poll sees a change.
+                let (stamp, c) = try await Task.detached { (Credentials.stamp(), try Credentials.read()) }.value
+                credentials = c
+                credentialsStamp = stamp
+                if c.token == rejectedToken {
+                    // The same login it was before: still expired, and don't re-read until it changes.
+                    throw UsageProblem.loginExpired
+                }
+                rejectedToken = nil
+                return c
+            } catch let p as UsageProblem where p == .loginExpired {
+                throw p
+            } catch {
+                credentials = nil
+                credentialsStamp = nil
+                throw error
+            }
         }
     }
 

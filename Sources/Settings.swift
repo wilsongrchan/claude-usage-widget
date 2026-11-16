@@ -321,6 +321,8 @@ struct AppearancePanel: View {
     @AppStorage("showWidget") var showWidget = true
     @AppStorage("menuBar") var menuBar = true
     @AppStorage("floatOnTop") var floatOnTop = false
+    /// Mirrors SMAppService (never stored); re-read when the panel appears.
+    @State private var openAtLogin = LoginItem.isOn
     @State private var custom: [Double] = WeekBudget.custom
 
     var small = false
@@ -338,6 +340,7 @@ struct AppearancePanel: View {
                     }
                 }
             }
+            .onAppear { openAtLogin = LoginItem.isOn }
         } else {
             fullBody
         }
@@ -391,6 +394,14 @@ struct AppearancePanel: View {
             TileSpec(id: "float", help: "Float above windows: \(onOff(floatOnTop)). Off keeps it on the desktop.",
                      active: floatOnTop, glyph: AnyView(Image(systemName: "square.stack")),
                      action: { floatOnTop.toggle(); onLevelChange(floatOnTop) }),
+            TileSpec(id: "login", help: LoginItem.translocated ? "Open at Login: move Claude Usage to Applications first."
+                        : "Open at Login: \(onOff(openAtLogin))\(LoginItem.status == .requiresApproval ? ", waiting for approval in System Settings → Login Items" : "").",
+                     active: openAtLogin, glyph: AnyView(Image(systemName: "power")),
+                     action: {
+                         guard !LoginItem.translocated else { return }
+                         try? LoginItem.set(!openAtLogin)
+                         openAtLogin = LoginItem.isOn
+                     }),
         ]
         return t
     }
@@ -564,12 +575,27 @@ struct AlertsPanel: View {
     @AppStorage("resetReminders") var resetReminders = true
     @AppStorage("resetCount") var resetCount = 0
     @AppStorage(UpdateChecker.enabledKey) var checkUpdates = true
+    @State private var notificationsDenied = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if showHeader { PanelHeader(title: "Alerts", onBack: nav.pop) }
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 12) {
+                    if notificationsDenied {
+                        // Otherwise every alert below would fail silently.
+                        HStack(spacing: 6) {
+                            Image(systemName: "bell.slash").foregroundStyle(Palette.ember)
+                            Text(compact ? "Notifications off" : "Notifications are off for Claude Usage")
+                                .lineLimit(1).minimumScaleFactor(0.8)
+                            Spacer(minLength: 4)
+                            Button("Turn On…") { NSWorkspace.shared.open(NotificationAccess.settingsURL) }
+                                .buttonStyle(.plain)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(Palette.claude)
+                        }
+                        .font(.system(size: 11))
+                    }
                     SectionLabel(text: "Usage alerts")
                     ForEach(LimitAlerts.groups, id: \.key) { g in
                         ThresholdEditor(key: g.key, title: g.title, subtitle: g.subtitle, compact: compact)
@@ -593,6 +619,16 @@ struct AlertsPanel: View {
                 .padding(.bottom, 2)
             }
         }
+        .task { await checkNotifications() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await checkNotifications() }
+        }
+        // Coming back from System Settings doesn't activate this app, so look again on hover too.
+        .onHover { if $0 { Task { await checkNotifications() } } }
+    }
+
+    func checkNotifications() async {
+        notificationsDenied = await NotificationAccess.status() == .denied
     }
 }
 
@@ -1054,7 +1090,7 @@ struct AboutPanel: View {
                     section("Your data stays on this Mac", icon: "lock",
                             "There is no server of ours, no account, no analytics and no tracking. The app reads your existing Claude Code login from the macOS Keychain and uses it only to ask Anthropic's own API (api.anthropic.com) for your usage. The login token is never saved, logged or sent anywhere else. Separately, once a day it asks GitHub whether a newer version is out; that request carries no personal data, and you can turn it off in Alerts.")
                     section("Keychain access", icon: "key",
-                            "macOS asks whether \u{201C}security\u{201D} may use \u{201C}Claude Code-credentials\u{201D}: that's how the app reads your Claude Code login. Always Allow stops macOS asking again, but it also lets other software on this Mac read that login through the same system tool. Allow asks again each time the app re-reads the login (at launch and every few hours).")
+                            "macOS asks whether \u{201C}security\u{201D} may use \u{201C}Claude Code-credentials\u{201D}: that's how the app reads your Claude Code login. Always Allow stops macOS asking again, but it also lets other software on this Mac read that login through the same system tool. Allow asks again each time the app re-reads the login (at launch, and when Claude Code renews its login).")
                     section("What's stored locally", icon: "internaldrive",
                             "Your settings, saved-reset count and expiry, and today's hourly usage are kept in this Mac's app preferences. Nothing leaves your Mac except that usage request to Anthropic and the daily update check with GitHub.")
                     section("Accuracy", icon: "info.circle",

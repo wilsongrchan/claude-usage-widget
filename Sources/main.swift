@@ -1007,8 +1007,9 @@ struct WidgetView: View {
         // minWidth/minHeight 0: never report a size bigger than the glass. Otherwise, while the
         // glass is still growing, the bigger layout gets centered in it and jumps.
         .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: contentAnchor)
-        .overlay(alignment: .top) {
-            // Small widget: controls float in on hover.
+        .overlay(alignment: .topTrailing) {
+            // Small widget: controls float in on hover, from the top-right corner like the
+            // medium and large header.
             if size == .small && hovering && stack.isEmpty {
                 controls
                     .environment(\.iconButtonSize, 19)
@@ -1017,6 +1018,7 @@ struct WidgetView: View {
                     // Same buttons as the medium/large header: glide there when the size changes.
                     .matchedGeometryEffect(id: "controls", in: rings)
                     .padding(.top, 6)
+                    .padding(.trailing, 6)
                     .transition(.opacity)
             }
         }

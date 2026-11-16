@@ -18,33 +18,36 @@ WHAT YOU NEED
 
 INSTALL
 -------
-1. Unzip ClaudeUsage.zip (double-click it).
+1. Drag "ClaudeUsage.app" into your Applications folder, then open it.
+   macOS says Apple could not verify it. Click "Done".
 
-2. Drag "ClaudeUsage.app" into your Applications folder.
+2. Open System Settings → Privacy & Security, scroll down and click
+   "Open Anyway" next to the ClaudeUsage message.
 
-3. Open it the first time like this, because it isn't from the App Store:
-   - Right-click (or Control-click) ClaudeUsage.app and choose "Open".
-   - Click "Open" in the box that appears.
+3. Click "Open Anyway" again and enter your password or use Touch ID.
+   You only do this once.
 
-   If macOS says it "can't be opened" and only offers to cancel or move it
-   to the Bin:
-   - Open System Settings → Privacy & Security.
-   - Scroll down and click "Open Anyway" next to the ClaudeUsage message.
-   - Confirm with your password or Touch ID.
+4. The welcome window walks you through the rest:
+   - Connect to Claude Code. macOS asks whether "security" may use
+     "Claude Code-credentials" in your keychain. That's how the app reads
+     your Claude Code login. It never leaves your Mac except to ask
+     Anthropic for your usage.
+     "Always Allow" stops macOS asking again, but it also lets other
+     software on this Mac read that login through the same system tool.
+     "Allow" asks again each time the app re-reads the login (at launch
+     and every few hours).
+   - Notifications, so your usage alerts can reach you.
+   - Open at Login, to start it whenever you log in (also in Settings).
 
-4. macOS asks whether "security" can use the "Claude Code-credentials" item
-   in your keychain. Click "Always Allow". This is how the widget reads your
-   Claude Code login. It never leaves your Mac except to ask Anthropic for
-   your usage.
+The widget appears on your desktop. Drag it where you like. It snaps to the
+same grid as your other desktop widgets.
 
-5. The widget appears on your desktop. Drag it where you like. It snaps to
-   the same grid as your other desktop widgets.
+Prefer Terminal for steps 1 to 3? After dragging the app into Applications:
+   xattr -dr com.apple.quarantine /Applications/ClaudeUsage.app
+then open it normally.
 
-
-START IT AUTOMATICALLY AT LOGIN (optional)
------------------------------------------
-System Settings → General → Login Items → click "+" under "Open at Login"
-→ choose ClaudeUsage from Applications.
+Or install and update in one line, without the warning at all:
+   curl -fsSL https://raw.githubusercontent.com/wilsongrchan/claude-usage-widget/main/install.sh | bash
 
 
 USING IT
@@ -63,8 +66,8 @@ USING IT
 
 TROUBLESHOOTING
 ---------------
-- "Claude Code login not found": install Claude Code and log in, then
-  click refresh in the widget.
+- "Claude Code not found": install Claude Code and log in, then click
+  refresh in the widget.
 - "Login expired": open Claude Code and use it once. That refreshes the
   login, and the widget picks it up automatically.
 - "Updates paused · retrying…": Anthropic asked the widget to slow down
@@ -75,9 +78,11 @@ TROUBLESHOOTING
 
 UNINSTALL
 ---------
-1. Click the gear in the widget → About → Quit.
-2. Drag ClaudeUsage.app from Applications to the Bin.
-3. If you added it to Login Items, remove it there too.
+1. Quit it: the X on the widget → Quit Claude Usage (or the gear →
+   About → Quit). Turn off Open at Login first if you had it on.
+2. Drag ClaudeUsage.app from Applications to the Trash.
+3. Optional, to remove its settings too, run in Terminal:
+   defaults delete local.claude-usage-widget
 
 
 PRIVACY

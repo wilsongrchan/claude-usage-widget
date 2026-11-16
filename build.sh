@@ -5,6 +5,9 @@
 #   ./build.sh dist       universal (Apple Silicon + Intel) build, zipped with the install
 #                         guide into dist/ClaudeUsage.zip for sharing
 #   ./build.sh test       compile Sources/Core + Tests into a command-line runner and run it
+#
+# The version comes from $VERSION (e.g. VERSION=0.2.0 ./build.sh dist), else the latest git
+# tag without its "v", else 0.0.0.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -17,6 +20,14 @@ if [[ "${1:-}" == "test" ]]; then
   mkdir -p build
   swiftc -swift-version 5 -target "$(uname -m)-apple-macos26" Sources/Core/*.swift Tests/*.swift -o build/tests
   exec build/tests
+fi
+
+VERSION="${VERSION:-$(git describe --tags --abbrev=0 2>/dev/null || true)}"
+VERSION="${VERSION#v}"
+VERSION="${VERSION:-0.0.0}"
+if [[ ! "$VERSION" =~ '^[0-9]+(\.[0-9]+){0,2}$' ]]; then
+  echo "VERSION must look like 1.2.3 (got '$VERSION')" >&2
+  exit 1
 fi
 
 APP=build/ClaudeUsage.app
@@ -36,7 +47,7 @@ else
     $SOURCES -o "$APP/Contents/MacOS/ClaudeUsage"
 fi
 
-cat > "$APP/Contents/Info.plist" <<'PLIST'
+cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -45,7 +56,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleExecutable</key><string>ClaudeUsage</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.1.0</string>
+  <key>CFBundleShortVersionString</key><string>$VERSION</string>
+  <key>CFBundleVersion</key><string>$VERSION</string>
   <key>LSMinimumSystemVersion</key><string>26.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
@@ -53,7 +65,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 PLIST
 
 codesign --force --sign - "$APP" >/dev/null
-echo "Built $APP"
+echo "Built $APP ($VERSION)"
 
 if [[ "${1:-}" == "dist" ]]; then
   STAGE=build/dist-stage/ClaudeUsage
@@ -73,6 +85,7 @@ if [[ "${1:-}" == "install" ]]; then
   rm -rf "$DEST" && cp -R "$APP" "$DEST"
 
   AGENT="$HOME/Library/LaunchAgents/local.claude-usage-widget.plist"
+  mkdir -p "$HOME/Library/LaunchAgents"
   cat > "$AGENT" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

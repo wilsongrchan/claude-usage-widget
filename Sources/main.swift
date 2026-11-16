@@ -44,6 +44,15 @@ final class UsageStore: ObservableObject {
     /// After Deny on the Keychain prompt, don't ask again on every poll: wait for Refresh.
     private var keychainDenied = false
     private var refreshing = false
+    /// False on first launch until the welcome window's Connect (or any Refresh): polls don't
+    /// touch the Keychain before the user knows why macOS is about to ask.
+    var keychainAllowed = true
+
+    func allowKeychain() {
+        guard !keychainAllowed else { return }
+        keychainAllowed = true
+        Task { await refresh() }
+    }
 
     /// "Updates paused · retrying in 4m" etc.
     var notice: String? {
@@ -122,6 +131,8 @@ final class UsageStore: ObservableObject {
         // One at a time: the poll, wake and Refresh can overlap, and each Keychain read can show
         // a prompt (left unanswered, overlapping refreshes would stack up prompts).
         guard !refreshing else { return }
+        guard keychainAllowed || userInitiated else { return }
+        keychainAllowed = true
         if keychainDenied && !userInitiated { return }
         keychainDenied = false
         refreshing = true
@@ -1840,7 +1851,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             let host = NSHostingController(rootView: pop)
             host.preferredContentSize = NSSize(width: Grid.widgetSize(2), height: Grid.widgetSize(2))
             menuBar = MenuBarController(store: store, content: host)
+            let firstRun = Welcome.needed()
+            store.keychainAllowed = !firstRun
             store.start()
+            if firstRun { Welcome.show(store: store) }
             UpdateChecker.shared.start()
         }
     }

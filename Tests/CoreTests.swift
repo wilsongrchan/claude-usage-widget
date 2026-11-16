@@ -113,7 +113,9 @@ func testRestEvenly() {
                                usedBeforeToday: 0.3, calendar: utc)!
         expectClose(first.shares[0], 1.0 / 7, "first day: nothing gone yet, 7 even days")
         let unknown = WeekBudget(resetsAt: reset, now: date(2026, 11, 19, 12), mode: 3, custom: [], calendar: utc)!
-        expectClose(unknown.shares[3], 0.25, "no start reading: what's left is all of it")
+        expectClose(unknown.shares[3], 1.0 / 7, "no start reading for today: falls back to 7 even days")
+        expectClose(unknown.boundaries[3], 3.0 / 7)
+        expectClose(unknown.expected, 3.5 / 7)
     }
 
     suite("DayStartLog keeps the first reading of each day slot") {

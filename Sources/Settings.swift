@@ -392,16 +392,20 @@ struct AppearancePanel: View {
     @AppStorage("floatOnTop") var floatOnTop = false
 
     var showHeader = true
+    /// Width of Theme and Size (the large widget's content is 312pt; Resize direction needs ~170).
+    static let leftColumn: CGFloat = 124
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if showHeader { PanelHeader(title: "Widget", onBack: nav.pop) }
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 10) {
-                    // Pairs side by side so the whole tab needs little scrolling.
-                    HStack(alignment: .top, spacing: 12) {
+                    // Pairs side by side so the whole tab needs little scrolling. The left column has
+                    // one fixed width so Color style and Resize direction start at the same edge.
+                    HStack(alignment: .top, spacing: 10) {
                         LabeledPicker(title: "Theme", selection: $theme,
                                       options: [("Auto", 0), ("Light", 1), ("Dark", 2)])
+                            .frame(width: Self.leftColumn)
                         LabeledPicker(title: "Color style", selection: $widgetStyle,
                                       options: [("Auto", 0), ("Color", 1), ("Mono", 2)])
                     }
@@ -411,17 +415,18 @@ struct AppearancePanel: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     if allowSize {
-                        HStack(alignment: .top, spacing: 12) {
+                        HStack(alignment: .top, spacing: 10) {
                             LabeledPicker(title: "Size", selection: Binding(
                                 get: { sizeRaw }, set: { v in
                                     WidgetSize.noteChange(from: sizeRaw, to: v)
                                     withAnimation(WidgetSize.changeAnimation) { sizeRaw = v }
                                     onSizeChange(true) }),
                                           options: WidgetSize.allCases.map { ($0.name, $0.rawValue) })
+                                .frame(width: Self.leftColumn)
                             // Which way it shrinks (growing goes back the same way).
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Resize direction").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-                                HStack(alignment: .top, spacing: 8) {
+                                HStack(alignment: .top, spacing: 5) {
                                     VStack(spacing: 3) {
                                         IconChoice(selection: $shrinkDown, options: [
                                             (false, "Large → medium shrinks up", AnyView(ShrinkGlyph(vertical: true, toEnd: false))),
@@ -439,6 +444,7 @@ struct AppearancePanel: View {
                                 }
                             }
                             .fixedSize()
+                            Spacer(minLength: 0)
                         }
                     }
 

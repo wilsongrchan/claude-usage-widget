@@ -1417,11 +1417,12 @@ struct WidgetView: View {
 
     /// Settings and saved resets only render at large size: a small or medium widget grows
     /// (from its Resize direction corner) with the panel fading in as it goes, so the large
-    /// rings never flash up in between.
+    /// rings never flash up in between. At any size, a size picked while a panel is open
+    /// applies when it closes.
     func open(_ p: Panel) {
         if p == .settings { UserDefaults.standard.set(0, forKey: "settingsTab") }   // always start on the first tab (Rings)
         NSApp.activate()   // lets the date field take keyboard input
-        if !forceLarge && savedSize != .large && !state.expanded { onExpand(true) }
+        if !forceLarge && !state.expanded { onExpand(true) }
         withAnimation(Self.panelAnimation) { stack.append(p) }
     }
 
@@ -1876,12 +1877,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     /// overlap them, go above them, still below every app window.
     static let settingsLevel = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) + 3)
 
-    /// Grow to large from the Resize direction corner (shifted just enough to stay on screen),
-    /// or go back to exactly where it was. Never re-snaps and never saves size or position.
+    /// A panel is opening: grow to large from the Resize direction corner (shifted just enough to
+    /// stay on screen; already large stays put), or, when it closes, go back to exactly where it
+    /// was, or apply a size picked meanwhile. Never re-snaps or saves size or position while open.
     func setExpanded(_ on: Bool) {
         let state = MainActor.assumeIsolated { WidgetState.shared }
         if on {
-            guard expandedFrom == nil, size != .large else { return }
+            guard expandedFrom == nil else { return }
             let w0 = widgetFrame
             expandedFrom = (w0, size)
             let outer = Grid.outer(.large), a = anchors

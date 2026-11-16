@@ -51,7 +51,8 @@ struct WeekBudget {
         let frac = min(max((t - Double(k) * 86400) / 86400, 0), 1)
         current = k
 
-        if mode == 3 {
+        // Rest evenly needs today's starting figure; until it's known, use 7 even days.
+        if mode == 3, k == 0 || usedBeforeToday != nil {
             // Days already gone collapse into one slice of what they used (zero-width slices
             // aren't drawn); the rest of the limit is split evenly from today on.
             let used = k == 0 ? 0 : min(max(usedBeforeToday ?? 0, 0), 1)

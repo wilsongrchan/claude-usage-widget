@@ -8,7 +8,7 @@ func uniformSlices(_ n: Int) -> [Double] { (0...n).map { Double($0) / Double(n) 
 
 /// How the weekly limit is split across the 7 days of the current window.
 /// Mode 0 = 7 even days, 1 = weekdays only (Mon–Fri), 2 = custom % per weekday,
-/// 3 = split remaining: what was used before today is one slice, and what's left is shared
+/// 3 = split: what was used before today is one slice, and what's left is shared
 /// equally by today and the days still to come.
 struct WeekBudget {
     /// Short weekday names in the Mac's language, Monday first ("Mon"… or "lun."…).
@@ -51,7 +51,7 @@ struct WeekBudget {
         let frac = min(max((t - Double(k) * 86400) / 86400, 0), 1)
         current = k
 
-        // Split remaining needs today's starting figure; until it's known, use 7 even days.
+        // Split needs today's starting figure; until it's known, use 7 even days.
         if mode == 3, k == 0 || usedBeforeToday != nil {
             // Days already gone collapse into one slice of what they used (zero-width slices
             // aren't drawn); the rest of the limit is split evenly from today on.
@@ -86,7 +86,7 @@ struct WeekBudget {
     }
 }
 
-/// Weekly usage at the start of each day slot of the limit week (for "Split remaining"). The first
+/// Weekly usage at the start of each day slot of the limit week (for "Split"). The first
 /// reading in a new slot is taken as its start; if the app wasn't running then, that's a little late.
 enum DayStartLog {
     static let key = "weeklyDayStart"   // [window, slot, utilization 0…100]

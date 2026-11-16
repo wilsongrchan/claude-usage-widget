@@ -271,6 +271,7 @@ struct RingsPanel: View {
     @AppStorage("showScoped") var showScoped = true
     @AppStorage("showPaceNote") var showPaceNote = true
     @AppStorage("showForecast") var showForecast = true
+    @AppStorage(ResetTimes.key) var resetTimeStyle = 0
     @State private var custom: [Double] = WeekBudget.custom
 
     var body: some View {
@@ -304,6 +305,9 @@ struct RingsPanel: View {
                 SectionLabel(text: "Notes")
                 SettingToggle(title: "Pace note", isOn: $showPaceNote) { Image(systemName: "checkmark.circle") }
                 SettingToggle(title: "Run-out estimate", isOn: $showForecast) { Image(systemName: "hourglass") }
+                // The options are their own examples: time left, or the clock time it resets.
+                LabeledPicker(title: "Reset times", selection: $resetTimeStyle,
+                              options: [("In 3h 13m", 0), (uses24Hour ? "At 16:10" : "At 4:10 PM", 1)])
             }
             .padding(.bottom, 2)
         }

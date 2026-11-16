@@ -243,11 +243,11 @@ struct SettingsPanel: View {
                                             ForEach(0..<5, id: \.self) { k in
                                                 Circle()
                                                     .trim(from: Double(k) / 5 + 0.03, to: Double(k + 1) / 5 - 0.03)
-                                                    .stroke(style: StrokeStyle(lineWidth: 1.6, lineCap: .butt))
+                                                    .stroke(style: StrokeStyle(lineWidth: 1.5, lineCap: .butt))
                                             }
                                         }
                                         .rotationEffect(.degrees(-90))
-                                        .frame(width: 16, height: 16)
+                                        .frame(width: 13.5, height: 13.5)   // 15pt across with the stroke, like info.circle
                                     } else {
                                         Image(systemName: Self.tabs[i].icon).font(.system(size: 15, weight: .regular))
                                     }

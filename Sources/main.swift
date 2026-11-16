@@ -6,62 +6,13 @@ import AppKit
 import SwiftUI
 import UserNotifications
 
-// MARK: - API model
-
-struct UsageWindow: Decodable {
-    let utilization: Double?
-    let resets_at: String?
-}
-
-struct LimitEntry: Decodable {
-    struct Scope: Decodable {
-        struct Model: Decodable { let display_name: String? }
-        let model: Model?
-    }
-    let kind: String
-    let percent: Double?
-    let resets_at: String?
-    let scope: Scope?
-}
-
-struct Breakdown: Decodable {
-    struct Row: Decodable { let display_name: String?; let percent: Double? }
-    let rows: [Row]?
-}
-
-struct Usage: Decodable {
-    let five_hour: UsageWindow?
-    let seven_day: UsageWindow?
-    let limits: [LimitEntry]?
-    let seven_day_breakdown: Breakdown?
-}
-
-enum WidgetError: LocalizedError {
-    case msg(String)
-    case rateLimited(retryAfter: TimeInterval?)
-    var errorDescription: String? {
-        switch self {
-        case .msg(let m): return m
-        case .rateLimited: return "Rate limited"
-        }
-    }
-}
-
-func parseDate(_ s: String?) -> Date? {
-    guard let s else { return nil }
-    let f = ISO8601DateFormatter()
-    f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    if let d = f.date(from: s) { return d }
-    f.formatOptions = [.withInternetDateTime]
-    return f.date(from: s)
-}
-
 // MARK: - Data store
 
 @MainActor
 final class UsageStore: ObservableObject {
     @Published var usage: Usage?
-    @Published var error: String?
+    /// What's stopping a reading (login expired, no Claude Code, HTTP error…), if anything.
+    @Published var problem: UsageProblem?
     @Published var lastUpdated: Date?
     @Published var now = Date()
     @Published var loading = false
@@ -71,9 +22,28 @@ final class UsageStore: ObservableObject {
     @Published var pausedReason: String?
     @Published var nextRetry: Date?
 
-    private var pollInterval: TimeInterval = 60
+    /// Long form, for the large widget and popover.
+    var error: String? { problem.map { "\($0.short). \($0.long)" } }
+
+    // Polling: every minute normally, every 5 minutes while the display sleeps or the screen is
+    // locked (Claude Code can still be working, and alerts still matter), longer when rate limited.
+    private static let activeInterval: TimeInterval = 60
+    private static let idleInterval: TimeInterval = 300
+    private var idleReasons: Set<String> = []
+    private var backoff: TimeInterval?
+    private var pollInterval: TimeInterval { max(idleReasons.isEmpty ? Self.activeInterval : Self.idleInterval, backoff ?? 0) }
+    private var scheduledInterval: TimeInterval?
     private var pollTimer: Timer?
     private var clockTimer: Timer?
+
+    // The login lives in memory only. The Keychain is read again only when there's no token,
+    // it's about to expire, the API rejected it, or the user pressed Refresh.
+    private var credentials: Credentials?
+    /// The token the API rejected; until Claude Code writes a new one, polls skip the network.
+    private var rejectedToken: String?
+    /// After Deny on the Keychain prompt, don't ask again on every poll: wait for Refresh.
+    private var keychainDenied = false
+    private var refreshing = false
 
     /// "Updates paused · retrying in 4m" etc.
     var notice: String? {
@@ -93,87 +63,143 @@ final class UsageStore: ObservableObject {
             usage = cached
             lastUpdated = d.object(forKey: "lastUsageDate") as? Date
         }
-        if let t = lastUpdated, Date().timeIntervalSince(t) < 50 {
-            // fresh enough; the regular poll will pick it up
-        } else {
-            Task { await refresh() }
-        }
+        if !isFresh { Task { await refresh() } }
         schedulePoll()
+
+        let ws = NSWorkspace.shared.notificationCenter
         // Catch up straight after the Mac wakes instead of waiting for the next poll.
-        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { _ in
+        ws.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { _ in
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(3))   // let the network come back first
                 await self.refresh()
             }
         }
+        // Display asleep, screen locked or another user's session in front: poll less often.
+        let idle: [(Notification.Name, Notification.Name, String, NotificationCenter)] = [
+            (NSWorkspace.screensDidSleepNotification, NSWorkspace.screensDidWakeNotification, "display", ws),
+            (NSWorkspace.sessionDidResignActiveNotification, NSWorkspace.sessionDidBecomeActiveNotification, "session", ws),
+            (Notification.Name("com.apple.screenIsLocked"), Notification.Name("com.apple.screenIsUnlocked"), "locked",
+             DistributedNotificationCenter.default()),
+        ]
+        for (begin, end, reason, center) in idle {
+            center.addObserver(forName: begin, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { self.setIdle(reason, true) }
+            }
+            center.addObserver(forName: end, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { self.setIdle(reason, false) }
+            }
+        }
+
         clockTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { _ in
-            Task { @MainActor in self.now = Date(); ResetReminder.check(); LimitAlerts.checkSessionReset(now: Date()) }
+            Task { @MainActor in
+                self.now = Date(); ResetReminder.check(); LimitAlerts.checkSessionReset(now: Date())
+                Housekeeping.runIfDue(now: Date())
+            }
         }
     }
 
+    private var isFresh: Bool { lastUpdated.map { Date().timeIntervalSince($0) < 50 } ?? false }
+
+    private func setIdle(_ reason: String, _ on: Bool) {
+        let wasIdle = !idleReasons.isEmpty
+        if on { idleReasons.insert(reason) } else { idleReasons.remove(reason) }
+        schedulePoll()
+        // Back in front of the screen: catch up at once if the reading is stale.
+        if wasIdle && idleReasons.isEmpty && !isFresh { Task { await refresh() } }
+    }
+
     private func schedulePoll() {
+        guard scheduledInterval != pollInterval else { return }
+        scheduledInterval = pollInterval
         pollTimer?.invalidate()
         pollTimer = Timer.scheduledTimer(withTimeInterval: pollInterval, repeats: true) { _ in
             Task { @MainActor in await self.refresh() }
         }
     }
 
-    func refresh() async {
+    /// `userInitiated`: the Refresh button, which also re-reads the login from the Keychain.
+    func refresh(userInitiated: Bool = false) async {
+        // One at a time: the poll, wake and Refresh can overlap, and each Keychain read can show
+        // a prompt (left unanswered, overlapping refreshes would stack up prompts).
+        guard !refreshing else { return }
+        if keychainDenied && !userInitiated { return }
+        keychainDenied = false
+        refreshing = true
         loading = true
-        defer { loading = false; now = Date() }
+        defer { refreshing = false; loading = false; now = Date() }
+
         do {
-            let (result, raw) = try await Task.detached { try await UsageStore.fetch() }.value
-            usage = result
-            error = nil
-            pausedReason = nil
-            nextRetry = nil
-            lastUpdated = Date()
-            UserDefaults.standard.set(raw, forKey: "lastUsageData")
-            UserDefaults.standard.set(lastUpdated, forKey: "lastUsageDate")
-            Forecast.record(result, now: Date())
-            HourlyLog.record(result, now: Date())
-            LimitAlerts.check(result, now: Date())
-            if pollInterval != 60 { pollInterval = 60; schedulePoll() }
-        } catch WidgetError.rateLimited(let retryAfter) {
-            // Back off: honour the server's Retry-After if given, else double the wait (max 10 min).
-            error = nil
+            var creds = try await currentCredentials(reread: userInitiated)
+            if let rejected = rejectedToken {
+                guard creds.token != rejected else { throw UsageProblem.loginExpired }   // still the old login
+                rejectedToken = nil
+            }
+            let result: (Usage, Data)
+            do {
+                result = try await Self.fetch(token: creds.token)
+            } catch UsageProblem.loginExpired {
+                // Claude Code may have refreshed its login since we read it: re-read once, retry once.
+                let fresh = try await currentCredentials(reread: true)
+                guard fresh.token != creds.token else {
+                    rejectedToken = creds.token
+                    throw UsageProblem.loginExpired
+                }
+                creds = fresh
+                result = try await Self.fetch(token: creds.token)
+            }
+            accept(result)
+        } catch let r as RateLimited {
+            // Back off: honour the server's Retry-After (up to an hour), else double the wait (max 10 min).
+            problem = nil
             pausedReason = "Updates paused"
-            pollInterval = min(max(retryAfter ?? pollInterval * 2, 60), 600)
+            backoff = min(max(r.retryAfter.map { min($0, 3600) } ?? pollInterval * 2, 60),
+                          r.retryAfter == nil ? 600 : 3600)
             nextRetry = Date().addingTimeInterval(pollInterval)
             schedulePoll()
         } catch is URLError {
-            error = nil
+            problem = nil
             pausedReason = "Offline"
             nextRetry = Date().addingTimeInterval(pollInterval)
+        } catch let p as UsageProblem {
+            pausedReason = nil
+            keychainDenied = p == .keychainDenied
+            if p == .loginExpired, rejectedToken == nil, let t = credentials?.token { rejectedToken = t }
+            problem = p
         } catch {
             pausedReason = nil
-            self.error = error.localizedDescription
+            problem = .badResponse
         }
     }
 
-    nonisolated static func readToken() throws -> String {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/security")
-        p.arguments = ["find-generic-password", "-s", "Claude Code-credentials", "-w"]
-        let out = Pipe()
-        p.standardOutput = out
-        p.standardError = Pipe()
-        try p.run()
-        let data = out.fileHandleForReading.readDataToEndOfFile()
-        p.waitUntilExit()
-        guard p.terminationStatus == 0 else {
-            throw WidgetError.msg("Claude Code login not found in Keychain. Run `claude` and log in.")
-        }
-        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let oauth = obj["claudeAiOauth"] as? [String: Any],
-              let token = oauth["accessToken"] as? String else {
-            throw WidgetError.msg("Couldn't read Claude Code credentials.")
-        }
-        return token
+    private func accept(_ result: (Usage, Data)) {
+        let (u, raw) = result
+        usage = u
+        problem = nil
+        pausedReason = nil
+        nextRetry = nil
+        lastUpdated = Date()
+        UserDefaults.standard.set(raw, forKey: "lastUsageData")
+        UserDefaults.standard.set(lastUpdated, forKey: "lastUsageDate")
+        Forecast.record(u, now: Date())
+        HourlyLog.record(u, now: Date())
+        LimitAlerts.check(u, now: Date())
+        if backoff != nil { backoff = nil; schedulePoll() }
     }
 
-    nonisolated static func fetch() async throws -> (Usage, Data) {
-        let token = try readToken()
+    /// The in-memory login, re-read from the Keychain only when needed.
+    private func currentCredentials(reread: Bool) async throws -> Credentials {
+        if !reread, rejectedToken == nil, let c = credentials, !c.expiresSoon(now: Date()) { return c }
+        do {
+            let c = try await Task.detached { try Credentials.read() }.value
+            credentials = c
+            return c
+        } catch {
+            credentials = nil
+            throw error
+        }
+    }
+
+    nonisolated static func fetch(token: String) async throws -> (Usage, Data) {
         var req = URLRequest(url: URL(string: "https://api.anthropic.com/api/oauth/usage")!)
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
@@ -191,12 +217,14 @@ final class UsageStore: ObservableObject {
         let (data, resp) = try await session.data(for: req)
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
         switch code {
-        case 200: return (try JSONDecoder().decode(Usage.self, from: data), data)
-        case 401, 403: throw WidgetError.msg("Login expired. Use Claude Code once to refresh it.")
+        case 200:
+            guard let u = try? JSONDecoder().decode(Usage.self, from: data) else { throw UsageProblem.badResponse }
+            return (u, data)
+        case 401, 403: throw UsageProblem.loginExpired
         case 429:
             let retry = (resp as? HTTPURLResponse)?.value(forHTTPHeaderField: "Retry-After").flatMap(Double.init)
-            throw WidgetError.rateLimited(retryAfter: retry)
-        default: throw WidgetError.msg("Usage API returned HTTP \(code)")
+            throw RateLimited(retryAfter: retry)
+        default: throw UsageProblem.unavailable(status: code)
         }
     }
 }
@@ -313,10 +341,12 @@ struct RingGauge: View {
                     let a = slices[k] + gap
                     let b = slices[k + 1] - gap
                     if b > a {   // zero-budget days (e.g. weekends in Weekdays mode) are skipped
-                        // Track — the current slice is highlighted.
+                        // Track. Without the pace marker, the current slice (this hour / today)
+                        // is shaded darker so you can still see where you are; with the marker
+                        // that's redundant, so all slices match.
                         Circle()
                             .trim(from: a, to: b)
-                            .stroke(Palette.claude.opacity(segmented && k == today ? 0.32 : 0.16),
+                            .stroke(Palette.claude.opacity(segmented && !showMarker && k == today ? 0.42 : 0.16),
                                     style: StrokeStyle(lineWidth: lineWidth, lineCap: segmented ? .butt : .round))
                         // Fill
                         if p > a {
@@ -479,13 +509,23 @@ struct StackedNote: View {
 // MARK: - Saved limit resets (tracked manually — the usage API doesn't expose them)
 
 enum ResetReminder {
-    /// Default expiry: the Nov 2026 free full reset, which expires Dec 10, 2026 at 2pm PT.
-    static let defaultExpiry: Double = {
+    /// The Nov 2026 free full reset expires Dec 10, 2026 at 2pm PT. Only used to migrate people
+    /// who saved resets before the expiry became something you set yourself.
+    static let promoExpiry: Double = {
         var c = DateComponents()
         c.year = 2026; c.month = 12; c.day = 10; c.hour = 14
         c.timeZone = TimeZone(identifier: "America/Los_Angeles")
         return Calendar(identifier: .gregorian).date(from: c)!.timeIntervalSince1970
     }()
+
+    /// One-off: before this version, an unset expiry meant the promo date. Keep that for anyone
+    /// with saved resets, while it's still ahead.
+    static func migrateExpiry(now: Date) {
+        let d = UserDefaults.standard
+        guard d.integer(forKey: "resetCount") > 0, d.object(forKey: "resetExpiry") == nil,
+              now.timeIntervalSince1970 < promoExpiry else { return }
+        d.set(promoExpiry, forKey: "resetExpiry")
+    }
     static let settingsURL = URL(string: "https://claude.ai/settings/usage")!
 
     /// How long before expiry to remind, in seconds (user-editable). Default: 7 days, 1 day, 3 hours.
@@ -507,9 +547,10 @@ enum ResetReminder {
     }
 
     static var count: Int { UserDefaults.standard.integer(forKey: "resetCount") }
-    static var expiry: Double {
+    /// Nil until the user sets one (then no reminders fire).
+    static var expiry: Double? {
         let v = UserDefaults.standard.double(forKey: "resetExpiry")
-        return v > 0 ? v : defaultExpiry
+        return v > 0 ? v : nil
     }
 
     static func remainingText(_ secs: TimeInterval) -> String {
@@ -530,14 +571,15 @@ enum ResetReminder {
     static func check() {
         let d = UserDefaults.standard
         guard d.object(forKey: "resetReminders") as? Bool ?? true else { return }
-        let n = count, exp = expiry
+        guard let exp = expiry else { return }
+        let n = count
         let remaining = exp - Date().timeIntervalSince1970
         guard n > 0, remaining > 0 else { return }
         let thresholds = ResetReminder.leads   // ascending, in seconds
         guard let hit = thresholds.first(where: { remaining <= Double($0) }) else { return }
         let key = "notified-\(Int(exp))-\(hit)"
-        guard !d.bool(forKey: key) else { return }
-        for t in thresholds where t >= hit { d.set(true, forKey: "notified-\(Int(exp))-\(t)") }
+        guard !NotifiedLog.contains(key) else { return }
+        NotifiedLog.record(thresholds.filter { $0 >= hit }.map { "notified-\(Int(exp))-\($0)" }, now: Date())
 
         Notifier.post(id: key, title: "Claude limit reset expiring",
                       body: "You have \(n) saved reset\(n == 1 ? "" : "s") expiring in \(remainingText(remaining)). Click to use it in Settings → Usage.")
@@ -547,15 +589,16 @@ enum ResetReminder {
 /// Chip showing saved resets and their expiry; opens the editor when clicked.
 struct ResetChip: View {
     @AppStorage("resetCount") var count = 0
-    @AppStorage("resetExpiry") var expiry: Double = ResetReminder.defaultExpiry
+    @AppStorage("resetExpiry") var expiry: Double = 0   // 0 = not set
     let now: Date
     var compact = false
     var onTap: () -> Void = {}
 
     var body: some View {
-        let remaining = expiry - now.timeIntervalSince1970
+        let noExpiry = expiry <= 0
+        let remaining = noExpiry ? .infinity : expiry - now.timeIntervalSince1970
         let active = count > 0 && remaining > 0
-        let color = active ? ResetReminder.color(remaining) : Color.secondary
+        let color = active ? (noExpiry ? Palette.claude : ResetReminder.color(remaining)) : Color.secondary
 
         Button(action: onTap) {
             HStack(spacing: 5) {
@@ -569,6 +612,10 @@ struct ResetChip: View {
                 }
                 if compact {
                     Text("\(count)").monospacedDigit()
+                } else if active && noExpiry {
+                    Text("\(count) reset\(count == 1 ? "" : "s") saved")
+                    Text("·").foregroundStyle(.secondary)
+                    Text("set expiry")
                 } else if active {
                     Text("\(count) reset\(count == 1 ? "" : "s") saved")
                     Text("·").foregroundStyle(.secondary)
@@ -724,7 +771,7 @@ struct ControlBar: View {
     var body: some View {
         HStack(spacing: size == .small && showSizeToggle ? 2 : 3) {
             if showRefresh {
-                IconButton(help: "Refresh now", action: { Task { await store.refresh() } }) {
+                IconButton(help: "Refresh now", action: { Task { await store.refresh(userInitiated: true) } }) {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 11, weight: .heavy))   // ~2pt stroke, like the custom glyphs
                 }
@@ -952,7 +999,7 @@ struct WidgetView: View {
         let weekly = u.seven_day?.utilization ?? 0
         let session = u.five_hour?.utilization ?? 0
 
-        // Fixed gap (never reacts to status text). When the Fable bar is hidden, push the rings
+        // Fixed gap (never reacts to status text). When the model limit bar is hidden, push the rings
         // down by half that bar's space so the empty space above and below evens out.
         let hasScoped = showScoped && (u.limits ?? []).contains { $0.kind == "weekly_scoped" }
         Color.clear.frame(height: hasScoped ? 10 : 22)
@@ -1053,7 +1100,21 @@ struct WidgetView: View {
         .frame(maxWidth: .infinity)
         .help("Outer ring: weekly limit (7 days). Inner ring: 5-hour session. White ticks mark now.")
         .overlay(alignment: .topTrailing) {
-            if let age = ageText(store.lastUpdated, now: store.now),
+            if let p = store.problem {
+                // Something's wrong: a warning plus how old the numbers are.
+                HStack(spacing: 2) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                    if let age = ageText(store.lastUpdated, now: store.now) { Text(age) }
+                }
+                .font(.system(size: 9, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(dimmedNow ? AnyShapeStyle(Color.white.opacity(0.95)) : AnyShapeStyle(Palette.rust))
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(Color.primary.opacity(0.07)))
+                .offset(x: 2, y: -4)
+                .help("\(p.short). \(p.long)")
+            } else if let age = ageText(store.lastUpdated, now: store.now),
                store.notice != nil || store.now.timeIntervalSince(store.lastUpdated ?? store.now) > 150 {
                 Text(age)
                     .font(.system(size: 9, weight: .semibold))
@@ -1147,7 +1208,11 @@ struct WidgetView: View {
                 // One reserved status line so the rings never shift.
                 let n = store.error == nil ? store.notice : nil
                 Group {
-                    if n != nil {
+                    if let p = store.problem {
+                        Label(p.short, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(dimmedNow ? AnyShapeStyle(Color.white.opacity(0.95)) : AnyShapeStyle(Palette.rust))
+                            .help(p.long)
+                    } else if n != nil {
                         Label("Updates paused", systemImage: "pause.circle")
                             .foregroundStyle(.secondary)
                             .help("Anthropic's usage API asked us to slow down (or you're offline). The numbers shown are from the last successful update.")
@@ -1340,7 +1405,7 @@ struct RefreshButton: View {
     @ObservedObject var store: UsageStore
 
     var body: some View {
-        Button { Task { await store.refresh() } } label: {
+        Button { Task { await store.refresh(userInitiated: true) } } label: {
             Image(systemName: "arrow.clockwise")
                 .font(.system(size: 9, weight: .bold))
                 .frame(width: 16, height: 16)
@@ -1437,10 +1502,29 @@ enum Grid {
         return widgets["DesktopWidgetPlacementStorage"] as? Data
     }
 
+    /// Last placement read by `refreshPlacement` (main thread only). Reading it means running
+    /// `defaults`, so snapping uses this copy and never waits for the process.
+    nonisolated(unsafe) static var placementCache: Data?
+    nonisolated(unsafe) private static var placementLoading = false
+
+    /// Re-read the native widgets' placement in the background, then call `done` on the main thread.
+    static func refreshPlacement(then done: @escaping () -> Void = {}) {
+        guard !placementLoading else { return }
+        placementLoading = true
+        DispatchQueue.global(qos: .utility).async {
+            let data = placementData()
+            DispatchQueue.main.async {
+                placementCache = data
+                placementLoading = false
+                done()
+            }
+        }
+    }
+
     /// Native widget groups on this display: each group's top-left (points from the visible
     /// frame's top-left) and the screen rects of its widgets' cells.
     static func nativeLayout(in v: NSRect) -> (origins: [CGPoint], rects: [NSRect]) {
-        guard let data = placementData(),
+        guard let data = placementCache,
               let root = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
               let displays = root["NumberedDisplays"] as? [[String: Any]] else { return ([], []) }
         // Use the entry saved for this visible size; failing that, the closest one.
@@ -1475,12 +1559,8 @@ enum Grid {
         return (origins, rects)
     }
 
-    /// Positions along one axis: every step of `pitch` from `ref` that keeps a span of
-    /// `len` between `lo` and `hi`.
     private static func lattice(_ ref: CGFloat, len: CGFloat, lo: CGFloat, hi: CGFloat) -> [CGFloat] {
-        guard hi - lo >= len - 0.5 else { return [lo] }
-        let first = ref + ((lo - ref) / pitch).rounded(.up) * pitch
-        return stride(from: first, through: hi - len + 0.5, by: pitch).map { $0 }
+        gridLattice(ref, len: len, lo: lo, hi: hi, pitch: pitch).map { CGFloat($0) }
     }
 
     /// Nearest free slot for this widget size to `frame`'s origin on the given screen.
@@ -1609,7 +1689,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     //
     // The window is always large-widget sized, and the glass sits inside it at the corner chosen in
     // Resize direction. Changing size then only animates the glass: resizing a transparent window
-    // makes macOS redraw it from scratch, which flashes. Clicks on the empty part pass through.
+    // makes macOS redraw it from scratch, which flashes. Clicks on the empty, fully transparent
+    // part pass through on their own (macOS hit-tests transparent pixels; tested on macOS 26),
+    // so no mouse monitoring is needed.
 
     static let windowSize = Grid.outer(.large)
     private var anchorCache: (Bool, Bool)?
@@ -1648,14 +1730,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         window.setFrame(win, display: false)
         glass.frame = glassFrame(for: w, in: win)
         CATransaction.commit()
-        updateMousePassThrough()
-    }
-
-    /// Only the glass takes clicks; the rest of the window lets them through to whatever is below.
-    func updateMousePassThrough() {
-        guard window != nil, glass != nil else { return }
-        let inside = widgetFrame.insetBy(dx: Grid.inset, dy: Grid.inset).contains(NSEvent.mouseLocation)
-        if window.ignoresMouseEvents == inside { window.ignoresMouseEvents = !inside }
     }
 
     /// "Desktop widget" setting (the X can hide it). If both the widget and the menu bar
@@ -1673,6 +1747,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     func applicationDidFinishLaunching(_ note: Notification) {
+        Housekeeping.migrate(now: Date())
+        Housekeeping.runIfDue(now: Date())
         UNUserNotificationCenter.current().delegate = self
         applyTheme()
         NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification,
@@ -1724,31 +1800,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
         place(start)
         snap(animated: false)
-        window.onDragEnd = { [weak self] in self?.snap(animated: true) }
+        Grid.refreshPlacement { [weak self] in self?.resnapIfCovered() }
+        window.onDragEnd = { [weak self] in
+            self?.snap(animated: true)
+            Grid.refreshPlacement { self?.resnapIfCovered() }
+        }
         syncWidgetVisibility()
 
-        NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            self?.updateMousePassThrough()
-        }
-        NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved]) { [weak self] e in
-            self?.updateMousePassThrough()
-            return e
-        }
 
         // Fade/unfade as the user moves between apps and the desktop, like native widgets.
         updateFocus()
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification,
                                                           object: nil, queue: .main) { [weak self] _ in
             self?.updateFocus()
+            // Native widgets can only be moved from the desktop, so look again on the way there.
+            if self?.finderFrontmost == true { Grid.refreshPlacement { self?.resnapIfCovered() } }
         }
 
-        Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
-            self?.resnapIfCovered()
+        // A native widget can be dropped onto ours: while on the desktop, check once a minute.
+        // (Elsewhere, nothing can move them, so don't spend a `defaults` process on it.)
+        Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            guard let self, self.finderFrontmost, self.window.isVisible else { return }
+            Grid.refreshPlacement { self.resnapIfCovered() }
         }
 
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification,
                                                object: nil, queue: .main) { [weak self] _ in
             self?.snap(animated: false)
+            Grid.refreshPlacement { self?.snap(animated: false) }
         }
 
         MainActor.assumeIsolated {
@@ -1765,6 +1844,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             UpdateChecker.shared.start()
         }
     }
+
+    var finderFrontmost: Bool { NSWorkspace.shared.frontmostApplication?.bundleIdentifier == "com.apple.finder" }
 
     /// Native widgets don't know about this one, so one can be dropped on top of it.
     /// If that happens, move to the nearest free slot.
@@ -1784,7 +1865,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 ctx.duration = 0.25
                 ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
                 window.animator().setFrame(win, display: true)
-            }, completionHandler: { [weak self] in self?.updateMousePassThrough() })
+            })
         } else {
             place(target)
         }
@@ -1817,7 +1898,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             ctx.timingFunction = CAMediaTimingFunction(controlPoints: Float(c.0), Float(c.1), Float(c.2), Float(c.3))
             ctx.allowsImplicitAnimation = true
             glass.animator().frame = glassFrame(for: target, in: win)
-        }, completionHandler: { [weak self] in self?.updateMousePassThrough() })
+        }, completionHandler: { [weak self] in
+            Grid.refreshPlacement { self?.resnapIfCovered() }   // the new size may overlap a native widget
+        })
     }
 
     func applyLevel(_ onTop: Bool) {

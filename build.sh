@@ -4,8 +4,20 @@
 #   ./build.sh install    build, copy to ~/Applications, start at login, and launch
 #   ./build.sh dist       universal (Apple Silicon + Intel) build, zipped with the install
 #                         guide into dist/ClaudeUsage.zip for sharing
+#   ./build.sh test       compile Sources/Core + Tests into a command-line runner and run it
 set -euo pipefail
 cd "$(dirname "$0")"
+
+# Every Swift file under Sources (zsh's ** recurses), e.g. Sources/Core/*.swift too.
+SOURCES=(Sources/**/*.swift)
+
+if [[ "${1:-}" == "test" ]]; then
+  # Plain swiftc, no XCTest: the logic in Sources/Core has no AppKit/SwiftUI, so it builds
+  # into a small runner that exits non-zero if any check fails.
+  mkdir -p build
+  swiftc -swift-version 5 -target "$(uname -m)-apple-macos26" Sources/Core/*.swift Tests/*.swift -o build/tests
+  exec build/tests
+fi
 
 APP=build/ClaudeUsage.app
 rm -rf "$APP"
@@ -15,13 +27,13 @@ cp Resources/AppIcon.icns "$APP/Contents/Resources/"
 
 if [[ "${1:-}" == "dist" ]]; then
   for arch in arm64 x86_64; do
-    swiftc -O -swift-version 5 -target $arch-apple-macos26 Sources/*.swift -o build/ClaudeUsage-$arch
+    swiftc -O -swift-version 5 -target $arch-apple-macos26 $SOURCES -o build/ClaudeUsage-$arch
   done
   lipo -create -output "$APP/Contents/MacOS/ClaudeUsage" build/ClaudeUsage-arm64 build/ClaudeUsage-x86_64
   rm -f build/ClaudeUsage-arm64 build/ClaudeUsage-x86_64
 else
   swiftc -O -swift-version 5 -target arm64-apple-macos26 \
-    Sources/*.swift -o "$APP/Contents/MacOS/ClaudeUsage"
+    $SOURCES -o "$APP/Contents/MacOS/ClaudeUsage"
 fi
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'

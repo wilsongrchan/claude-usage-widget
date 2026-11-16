@@ -18,9 +18,6 @@ enum Notifier {
     }
 }
 
-/// Minute-resolution key for a reset time (the API's fractional seconds jitter between calls).
-func windowKey(_ d: Date) -> Int { Int((d.timeIntervalSince1970 / 60).rounded()) }
-
 // MARK: - Threshold & reset alerts
 
 enum LimitAlerts {
@@ -63,8 +60,8 @@ enum LimitAlerts {
             guard let util = it.util, let reset = it.reset,
                   let hit = list.last(where: { util >= $0 }) else { continue }
             let base = "alert-\(it.name)-\(windowKey(reset))"
-            guard !d.bool(forKey: "\(base)-\(Int(hit))") else { continue }
-            for t in list where t <= hit { d.set(true, forKey: "\(base)-\(Int(t))") }
+            guard !NotifiedLog.contains("\(base)-\(Int(hit))") else { continue }
+            NotifiedLog.record(list.filter { $0 <= hit }.map { "\(base)-\(Int($0))" }, now: now)
 
             Notifier.post(id: "\(base)-\(Int(hit))",
                           title: "\(it.name): \(Int(util))% used",
@@ -80,8 +77,8 @@ enum LimitAlerts {
         let since = now.timeIntervalSince1970 - r
         guard r > 0, since >= 0, since < 15 * 60, util >= 50 else { return }
         let key = "sessionReset-\(Int((r / 60).rounded()))"
-        guard !d.bool(forKey: key) else { return }
-        d.set(true, forKey: key)
+        guard !NotifiedLog.contains(key) else { return }
+        NotifiedLog.record([key], now: now)
         Notifier.post(id: key, title: "Session limit reset",
                       body: "Your 5-hour session is fresh again. You'd used \(Int(util))% of the last one.")
     }
@@ -90,7 +87,7 @@ enum LimitAlerts {
 // MARK: - Forecast
 
 enum Forecast {
-    struct Sample { let t: Date; let util: Double; let window: Int }
+    typealias Sample = ForecastMath.Sample
     @MainActor static var session: [Sample] = []
 
     @MainActor static func record(_ u: Usage, now: Date) {
@@ -103,23 +100,8 @@ enum Forecast {
     /// Session uses the last ~30 minutes of samples when available; otherwise the whole-window average.
     @MainActor static func hitTime(util: Double, resetsAt: Date?, duration: TimeInterval,
                                    now: Date, useRecent: Bool) -> Date? {
-        guard let resetsAt else { return nil }
-        if util >= 100 { return now }
-        let elapsed = duration - resetsAt.timeIntervalSince(now)
-        var rate: Double?   // percent per second
-
-        if useRecent {
-            let w = windowKey(resetsAt)
-            let pts = session.filter { abs($0.window - w) <= 2 && now.timeIntervalSince($0.t) <= 30 * 60 }
-            if let first = pts.first, now.timeIntervalSince(first.t) >= 8 * 60 {
-                rate = (util - first.util) / now.timeIntervalSince(first.t)
-            }
-        }
-        if rate == nil, elapsed > 10 * 60 { rate = util / elapsed }
-        guard let rate, rate > 0 else { return nil }
-
-        let hit = now.addingTimeInterval((100 - util) / rate)
-        return hit < resetsAt ? hit : nil
+        ForecastMath.hitTime(util: util, resetsAt: resetsAt, duration: duration, now: now,
+                             recent: useRecent ? session : nil)
     }
 }
 
@@ -178,3 +160,24 @@ private func formatter(_ pattern: String) -> DateFormatter {
 }
 func forecastTime(_ d: Date) -> String { formatter(uses24Hour ? "H:mm" : "h:mm a").string(from: d) }
 func forecastDay(_ d: Date) -> String { formatter(uses24Hour ? "EEE H:mm" : "EEE h a").string(from: d) }
+
+// MARK: - Housekeeping
+
+/// Keeps preferences from growing forever: old notification records and hourly logs.
+enum Housekeeping {
+    @MainActor private static var lastRun: Date?
+
+    /// Once at launch, before anything reads the old keys.
+    static func migrate(now: Date) {
+        NotifiedLog.migrateLegacy(now: now)
+        ResetReminder.migrateExpiry(now: now)
+    }
+
+    /// At launch and then once a day (called from the clock tick).
+    @MainActor static func runIfDue(now: Date) {
+        if let lastRun, now.timeIntervalSince(lastRun) < 86400 { return }
+        lastRun = now
+        NotifiedLog.prune(now: now)
+        HourlyLog.prune(now: now)
+    }
+}

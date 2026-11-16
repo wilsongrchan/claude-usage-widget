@@ -9,6 +9,7 @@ final class MenuBarController: NSObject {
     private var item: NSStatusItem?
     private var shown: Bool?             // cached state; guards against re-entrant defaults notifications
     private var lastUsage: Usage?
+    private var lastProblem: UsageProblem?
     private let popover = NSPopover()
     private var cancellable: AnyCancellable?
     private var defaultsObserver: NSObjectProtocol?
@@ -22,7 +23,9 @@ final class MenuBarController: NSObject {
         popover.delegate = self
 
         lastUsage = store.usage
-        cancellable = store.$usage.receive(on: RunLoop.main).sink { [weak self] u in self?.update(u) }
+        lastProblem = store.problem
+        cancellable = store.$usage.combineLatest(store.$problem).receive(on: RunLoop.main)
+            .sink { [weak self] u, p in self?.update(u, p) }
 
         syncVisibility()
         defaultsObserver = NotificationCenter.default.addObserver(
@@ -47,7 +50,7 @@ final class MenuBarController: NSObject {
                 button.toolTip = "Claude session usage"
             }
             item = it
-            update(lastUsage)
+            update(lastUsage, lastProblem)
         } else if let it = item {
             popover.performClose(nil)
             item = nil
@@ -55,15 +58,16 @@ final class MenuBarController: NSObject {
         }
     }
 
-    private func update(_ u: Usage?) {
+    private func update(_ u: Usage?, _ problem: UsageProblem?) {
         lastUsage = u
+        lastProblem = problem
         guard let item else { return }
         let pct = u?.five_hour?.utilization
         item.button?.image = Self.gaugeImage(pct)
         item.button?.title = pct.map { " \(Int($0.rounded()))%" } ?? ""
-        if let u {
-            item.button?.toolTip = "Session \(Int(u.five_hour?.utilization ?? 0))% · Weekly \(Int(u.seven_day?.utilization ?? 0))%"
-        }
+        var tip = u.map { "Session \(Int($0.five_hour?.utilization ?? 0))% · Weekly \(Int($0.seven_day?.utilization ?? 0))%" }
+        if let problem { tip = [tip, "⚠︎ \(problem.short)"].compactMap { $0 }.joined(separator: "\n") }
+        item.button?.toolTip = tip ?? "Claude session usage"
     }
 
     /// Popovers from the menu bar follow the menu bar's look (set by the wallpaper), not the

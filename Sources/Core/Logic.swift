@@ -75,6 +75,15 @@ enum ResetTimes {
         return p.hasPrefix("resets ") ? String(p.dropFirst("resets ".count)) : p
     }
 
+    /// The two choices in Settings, shown with the current session's real reset:
+    /// ("In 3h 13m", "At 16:10"). Without a session yet: ("Time left", "Clock time").
+    static func choiceLabels(_ d: Date?, now: Date, h24: Bool, calendar: Calendar = .current) -> (String, String) {
+        guard let d, d > now else { return ("Time left", "Clock time") }
+        func cap(_ s: String) -> String { s.prefix(1).uppercased() + s.dropFirst() }
+        return (cap(short(d, now: now, clock: false, h24: h24, calendar: calendar)),
+                cap(short(d, now: now, clock: true, h24: h24, calendar: calendar)))
+    }
+
     /// After a ↻ icon: "2d 19h", "4:10 PM", "Mon 9 AM".
     static func bare(_ d: Date, now: Date, clock useClock: Bool, h24: Bool, calendar: Calendar = .current) -> String {
         let s = Int(d.timeIntervalSince(now))

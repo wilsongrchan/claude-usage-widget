@@ -281,7 +281,7 @@ struct SettingsPanel: View {
             case 2: AlertsPanel(nav: nav, showHeader: false)
             case 3: DataPanel(store: store, nav: nav, showHeader: false)
             case 4: AboutPanel(nav: nav, showHeader: false, store: store)
-            default: RingsPanel()
+            default: RingsPanel(store: store)
             }
         }
     }
@@ -291,6 +291,7 @@ struct SettingsPanel: View {
 
 /// Everything about the rings themselves and the notes under them.
 struct RingsPanel: View {
+    @ObservedObject var store: UsageStore
     @AppStorage("showPaceMarker") var showPaceMarker = true
     @AppStorage("segmentedRings") var segmentedRings = true
     @AppStorage("weeklySplit") var weeklySplit = 0
@@ -331,7 +332,7 @@ struct RingsPanel: View {
                 SectionLabel(text: "Notes")
                 SettingToggle(title: "Pace note", isOn: $showPaceNote) { Image(systemName: "checkmark.circle") }
                 SettingToggle(title: "Run-out estimate", isOn: $showForecast) { Image(systemName: "hourglass") }
-                // A row like the switches above; the options are their own examples.
+                // A row like the switches above; the options show the current session's real reset.
                 HStack(spacing: 8) {
                     Image(systemName: "clock")
                         .font(.system(size: 11, weight: .semibold))
@@ -340,8 +341,10 @@ struct RingsPanel: View {
                         .accessibilityHidden(true)
                     Text("Reset times").font(.system(size: 12)).lineLimit(1)
                     Spacer(minLength: 4)
+                    let labels = ResetTimes.choiceLabels(parseDate(store.usage?.five_hour?.resets_at),
+                                                         now: store.now, h24: uses24Hour)
                     SegmentedChoice(title: "Reset times", selection: $resetTimeStyle,
-                                    options: [("In 3h 13m", 0), (uses24Hour ? "At 16:10" : "At 4:10 PM", 1)])
+                                    options: [(labels.0, 0), (labels.1, 1)])
                         .frame(width: 170)
                 }
             }

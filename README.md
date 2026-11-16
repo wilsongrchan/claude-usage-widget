@@ -60,10 +60,10 @@ The [script](install.sh) only downloads the same ClaudeUsage.zip as the link bel
 
 ## Make it yours
 
-Hover over the widget to show its buttons, and click the **gear** for Settings: theme, size, ring style, weekly budget, alerts and more.
+Hover over the widget for its five buttons: refresh, the two other sizes, the **gear** for Settings and the X. Or right-click it (or the menu bar gauge) for the same things in a menu. Settings open at large size, whatever size the widget is, and it goes back when you're done: Rings (pace marker, slices, weekly budget, notes), Widget (theme, color style, size), Alerts, Data and About.
 
 <p align="center">
-  <img src="docs/images/settings-appearance.png" width="200" alt="Appearance settings">
+  <img src="docs/images/settings-appearance.png" width="200" alt="Widget settings">
   <img src="docs/images/settings-alerts.png" width="200" alt="Alert settings">
   <img src="docs/images/settings-data.png" width="200" alt="Today by the hour">
 </p>

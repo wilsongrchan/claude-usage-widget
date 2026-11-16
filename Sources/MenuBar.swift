@@ -11,11 +11,13 @@ final class MenuBarController: NSObject {
     private var lastUsage: Usage?
     private var lastProblem: UsageProblem?
     private let popover = NSPopover()
+    private let store: UsageStore
     private var cancellable: AnyCancellable?
     private var defaultsObserver: NSObjectProtocol?
     private var outsideClickMonitor: Any?
 
     init(store: UsageStore, content: NSViewController) {
+        self.store = store
         super.init()
         popover.contentViewController = content
         popover.behavior = .transient
@@ -44,7 +46,8 @@ final class MenuBarController: NSObject {
             let it = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
             if let button = it.button {
                 button.target = self
-                button.action = #selector(toggle)
+                button.action = #selector(clicked)
+                button.sendAction(on: [.leftMouseUp, .rightMouseUp])
                 button.imagePosition = .imageLeading
                 button.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
                 button.toolTip = "Claude session usage"
@@ -77,20 +80,32 @@ final class MenuBarController: NSObject {
             ?? NSAppearance(named: NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) ?? .aqua)
     }
 
-    @objc private func toggle() {
-        guard let button = item?.button else { return }
-        if popover.isShown {
+    /// Left-click: the popover. Right-click or Control-click: the same menu as the widget's.
+    @objc private func clicked() {
+        let e = NSApp.currentEvent
+        if e?.type == .rightMouseUp || e?.modifierFlags.contains(.control) == true {
+            guard let item else { return }
+            popover.performClose(nil)
+            item.menu = AppMenu.contextMenu(store: store, forMenuBar: true)
+            item.button?.performClick(nil)   // shows the menu in the standard menu bar style
+            item.menu = nil                  // so the next left-click opens the popover again
+        } else if popover.isShown {
             popover.performClose(nil)
         } else {
-            NSApp.activate()
-            applyTheme()
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            // `.transient` misses clicks on the desktop or in other apps (this app is rarely
-            // the active one), so watch for them while the popover is open.
-            outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(
-                matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
-                MainActor.assumeIsolated { self?.popover.performClose(nil) }
-            }
+            showPopover()
+        }
+    }
+
+    func showPopover() {
+        guard let button = item?.button, !popover.isShown else { return }
+        NSApp.activate()
+        applyTheme()
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        // `.transient` misses clicks on the desktop or in other apps (this app is rarely
+        // the active one), so watch for them while the popover is open.
+        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
+            MainActor.assumeIsolated { self?.popover.performClose(nil) }
         }
     }
 

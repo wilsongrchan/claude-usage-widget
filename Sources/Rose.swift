@@ -79,13 +79,14 @@ struct RoseDiagram: View {
                     .frame(width: rayW, height: len)
                     .offset(y: -(inner + len / 2))
                     .rotationEffect(.degrees(Double(h) / 24 * 360))   // centred on the hour, so labels line up
-                    .help("\(h):00 – \(String(format: "%.1f", v))% of a session")
+                    .help("\(uses24Hour ? "\(h):00" : "\(h % 12 == 0 ? 12 : h % 12) \(h < 12 ? "AM" : "PM")") – \(String(format: "%.1f", v))% of a session")
             }
             ForEach([0, 6, 12, 18], id: \.self) { h in
                 let a = Double(h) / 24 * 2 * .pi
-                Text(h == 0 ? "12a" : h == 12 ? "12p" : h < 12 ? "\(h)a" : "\(h - 12)p")
-                    .font(.system(size: 8.5, weight: .semibold))
-                    .foregroundStyle(.tertiary)
+                // Follows the Mac's 12/24-hour setting: 12a 6a 12p 6p, or 0 6 12 18.
+                Text(uses24Hour ? "\(h)" : h == 0 ? "12a" : h == 12 ? "12p" : h < 12 ? "\(h)a" : "\(h - 12)p")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
                     .offset(x: sin(a) * (R + 10), y: -cos(a) * (R + 10))
             }
             if let centerValue {
@@ -96,7 +97,7 @@ struct RoseDiagram: View {
                         .minimumScaleFactor(0.6)
                     if let centerLabel {
                         Text(centerLabel)
-                            .font(.system(size: max(diameter * 0.055, 7), weight: .semibold))
+                            .font(.system(size: max(diameter * 0.055, 10), weight: .semibold))
                             .textCase(.uppercase)
                             .foregroundStyle(.secondary)
                     }

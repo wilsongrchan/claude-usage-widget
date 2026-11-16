@@ -26,15 +26,35 @@
 
 You'll need **macOS 26** or later and **[Claude Code](https://claude.com/claude-code)** logged in. That's it: no account or keys to set up.
 
-1. **[Download ClaudeUsage.zip](../../releases/latest/download/ClaudeUsage.zip)**, unzip it, and drag the app into **Applications**.
-2. The first time, **right-click the app → Open**, then **Open** again.
-3. When macOS asks about **"Claude Code-credentials"**, click **Always Allow**.
+### Quick install (Terminal)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/wilsongrchan/claude-usage-widget/main/install.sh | bash
+```
+
+The [script](install.sh) only downloads the same ClaudeUsage.zip as the link below and copies the app into Applications, so macOS won't show an "Apple could not verify" warning. Run it again any time to update.
+
+### Manual install
+
+1. **[Download ClaudeUsage.zip](../../releases/latest/download/ClaudeUsage.zip)**, unzip it, drag the app into **Applications** and open it. macOS says Apple could not verify it: click **Done**.
+2. Open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**.
+3. Click **Open Anyway** again and enter your password. You only do this once.
+4. The welcome window walks you through the rest: connecting to Claude Code, notifications and Open at Login.
 
 <details>
-<summary>Only seeing "Move to Bin"? Want it to start at login?</summary>
+<summary>Prefer Terminal for step 2? Wondering what to click on the Keychain prompt?</summary>
 
-- **"Move to Bin" only:** go to **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**. This happens because the app isn't from the App Store.
-- **Start at login:** System Settings → General → Login Items → **+** → choose ClaudeUsage.
+- **Skip steps 1–3:** after dragging the app into Applications, run `xattr -dr com.apple.quarantine /Applications/ClaudeUsage.app`, then open it normally.
+- **Keychain prompt:** macOS asks whether "security" may use **"Claude Code-credentials"**. That's how the app reads your Claude Code login. **Always Allow** stops macOS asking again, but it also lets other software on this Mac read that login through the same system tool. **Allow** asks again each time the app re-reads the login (at launch and every few hours).
+
+</details>
+
+<details>
+<summary>Uninstall</summary>
+
+1. Quit it: the X on the widget → **Quit Claude Usage** (or Settings → About → Quit).
+2. Drag **ClaudeUsage.app** from Applications to the **Trash**. Turn off Open at Login first if you had it on.
+3. Optional, to remove its settings too: `defaults delete local.claude-usage-widget`
 
 </details>
 
@@ -74,7 +94,7 @@ No account, no server, no tracking. It uses your Claude Code login **only** to a
 
 | Message | Fix |
 |---|---|
-| *Claude Code login not found* | Install Claude Code and log in, then press ↻ |
+| *Claude Code not found* | Install Claude Code and log in, then press ↻ |
 | *Login expired* | Use Claude Code once; the widget picks up the new login by itself |
 | *Updates paused · retrying…* | Anthropic asked the widget to slow down. Your last numbers stay on screen and it retries on its own |
 | No notifications | System Settings → Notifications → ClaudeUsage → allow |
@@ -90,7 +110,10 @@ Requires the Xcode Command Line Tools (`xcode-select --install`).
 ./build.sh            # build into ./build
 ./build.sh install    # build, install to ~/Applications, start at login
 ./build.sh dist       # universal build + zip in ./dist
+./build.sh test       # run the tests
 ```
+
+The version comes from the latest git tag, or set it with `VERSION=1.2.3 ./build.sh dist`. See [RELEASING.md](RELEASING.md) for how releases are made.
 
 </details>
 

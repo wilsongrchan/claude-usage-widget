@@ -479,6 +479,7 @@ struct AppearancePanel: View {
                         get: { floatOnTop }, set: { floatOnTop = $0; onLevelChange($0) })) {
                         Image(systemName: "square.stack")
                     }
+                    OpenAtLoginToggle()
                 }
                 .padding(.bottom, 2)
             }
@@ -575,7 +576,10 @@ struct AlertsPanel: View {
                     }
                     SectionLabel(text: "Other")
                     SettingToggle(title: compact ? "Session reset" : "Session reset (if 50%+ used)",
-                                  isOn: $sessionResetAlert) { SessionResetGlyph() }
+                                  isOn: Binding(get: { sessionResetAlert }, set: {
+                                      sessionResetAlert = $0
+                                      if $0 { NotificationAccess.requestIfUndetermined() }
+                                  })) { SessionResetGlyph() }
                     ReminderEditor(compact: compact)
                     NavRow(title: "Saved resets", subtitle: resetCount > 0 ? "\(resetCount) saved" : "None tracked",
                            action: { nav.push(.resets) }) { SessionResetGlyph().scaleEffect(0.85) }
@@ -613,7 +617,10 @@ struct ThresholdEditor: View {
                     }
                 }
                 Spacer(minLength: 4)
-                Toggle("", isOn: Binding(get: { enabled }, set: { enabled = $0; save() }))
+                Toggle("", isOn: Binding(get: { enabled }, set: {
+                    enabled = $0; save()
+                    if $0 { NotificationAccess.requestIfUndetermined() }
+                }))
                     .toggleStyle(PillSwitch())
                     .labelsHidden()
             }
@@ -721,7 +728,10 @@ struct ReminderEditor: View {
                     }
                 }
                 Spacer(minLength: 4)
-                Toggle("", isOn: $enabled)
+                Toggle("", isOn: Binding(get: { enabled }, set: {
+                    enabled = $0
+                    if $0 { NotificationAccess.requestIfUndetermined() }
+                }))
                     .toggleStyle(PillSwitch())
                     .labelsHidden()
             }
@@ -1043,6 +1053,8 @@ struct AboutPanel: View {
                             "Claude Usage is an independent, unofficial project. It is not made by, affiliated with, or endorsed by Anthropic. \"Claude\" and \"Anthropic\" are trademarks of Anthropic, PBC, used here only to describe what the app shows.")
                     section("Your data stays on this Mac", icon: "lock",
                             "There is no server of ours, no account, no analytics and no tracking. The app reads your existing Claude Code login from the macOS Keychain and uses it only to ask Anthropic's own API (api.anthropic.com) for your usage. The login token is never saved, logged or sent anywhere else. Separately, once a day it asks GitHub whether a newer version is out; that request carries no personal data, and you can turn it off in Alerts.")
+                    section("Keychain access", icon: "key",
+                            "macOS asks whether \u{201C}security\u{201D} may use \u{201C}Claude Code-credentials\u{201D}: that's how the app reads your Claude Code login. Always Allow stops macOS asking again, but it also lets other software on this Mac read that login through the same system tool. Allow asks again each time the app re-reads the login (at launch and every few hours).")
                     section("What's stored locally", icon: "internaldrive",
                             "Your settings, saved-reset count and expiry, and today's hourly usage are kept in this Mac's app preferences. Nothing leaves your Mac except that usage request to Anthropic and the daily update check with GitHub.")
                     section("Accuracy", icon: "info.circle",

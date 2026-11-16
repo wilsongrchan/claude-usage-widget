@@ -173,5 +173,11 @@ func testResetTimes() {
         expectEqual(ResetTimes.bare(monday, now: now, clock: true, h24: false, calendar: utc), "Mon 9 AM")
         expectEqual(ResetTimes.bare(monday, now: now, clock: false, h24: false, calendar: utc), "6d 20h")
         expectEqual(ResetTimes.phrase(now.addingTimeInterval(-5), now: now, clock: true, h24: false, calendar: utc), "resetting…")
+        let labels = ResetTimes.choiceLabels(later, now: now, h24: true, calendar: utc)
+        expectEqual(labels.0, "In 3h 13m"); expectEqual(labels.1, "At 16:10")
+        let late = ResetTimes.choiceLabels(half, now: now, h24: false, calendar: utc)
+        expectEqual(late.1, "Tue 1:42 AM", "a reset after midnight names the day")
+        let none = ResetTimes.choiceLabels(nil, now: now, h24: true, calendar: utc)
+        expectEqual(none.0, "Time left"); expectEqual(none.1, "Clock time")
     }
 }

@@ -116,8 +116,8 @@ struct UpdateDot: View {
     var body: some View {
         if updates.updateAvailable {
             Button { updates.showMenu() } label: {
-                Text("!")
-                    .font(.system(size: 6.5, weight: .black, design: .rounded))
+                Image(systemName: "exclamationmark")   // a badge glyph, not text
+                    .font(.system(size: 6, weight: .black))
                     .foregroundStyle(.white)
                     .frame(width: 9, height: 9)
                     .background(Circle().fill(Palette.claude))
@@ -126,6 +126,7 @@ struct UpdateDot: View {
             }
             .buttonStyle(.plain)
             .help("Version \(updates.latest ?? "") is available")
+            .accessibilityLabel("Update available: version \(updates.latest ?? "")")
             .transition(.scale.combined(with: .opacity))
         }
     }
@@ -135,17 +136,16 @@ struct UpdateDot: View {
 struct VersionSection: View {
     @ObservedObject var updates = UpdateChecker.shared
     @AppStorage(UpdateChecker.enabledKey) var checkUpdates = true
-    let compact: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Label("Version \(AppInfo.version)", systemImage: "app.badge")
-                    .font(.system(size: compact ? 11 : 12, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Palette.claude)
                 Spacer(minLength: 4)
                 if updates.newer {
-                    PillButton(title: compact ? "Get \(updates.latest ?? "")" : "Download \(updates.latest ?? "")",
+                    PillButton(title: "Download \(updates.latest ?? "")",
                                prominent: true) { updates.openRelease() }
                 } else if updates.checking {
                     ProgressView().controlSize(.mini)
@@ -154,7 +154,7 @@ struct VersionSection: View {
                 }
             }
             Text(statusText)
-                .font(.system(size: compact ? 10 : 11))
+                .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }

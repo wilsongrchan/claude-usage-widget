@@ -148,7 +148,7 @@ struct ForecastNote: View {
 
 /// Forecast times follow the Mac's 12/24-hour setting, but are always unambiguous:
 /// 12-hour → "4:10 PM", "Tue 8 AM"; 24-hour → "16:10", "Tue 8:00" (never a bare "08").
-private var uses24Hour: Bool {
+var uses24Hour: Bool {
     switch Locale.current.hourCycle {
     case .zeroToTwentyThree, .oneToTwentyFour: true
     default: false

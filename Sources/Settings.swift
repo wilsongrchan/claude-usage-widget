@@ -1,4 +1,4 @@
-// In-widget panels: Settings → Appearance / Alerts / Data, and Saved resets.
+// In-widget panels: Settings → Rings / Widget / Alerts / Data / About, and Saved resets.
 // Everything renders inside the widget; no OS menus or popovers.
 
 import AppKit
@@ -28,6 +28,7 @@ struct PanelHeader: View {
             }
             .buttonStyle(.plain)
             .help("Back")
+            .accessibilityLabel("Back")
             Text(title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
             Spacer()
         }
@@ -73,7 +74,8 @@ struct PillSwitch: ToggleStyle {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityValue(c.isOn ? "On" : "Off")
+        // VoiceOver: a standard switch with the toggle's label, reporting on/off.
+        .accessibilityRepresentation { Toggle(isOn: c.$isOn) { c.label } }
     }
 }
 
@@ -88,12 +90,13 @@ struct SettingToggle<Glyph: View>: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(isOn ? Palette.claude : Color.secondary)
                 .frame(width: 16)
+                .accessibilityHidden(true)   // decoration; the switch carries the name
             Text(title)
                 .font(.system(size: 12))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             Spacer(minLength: 4)
-            Toggle("", isOn: $isOn)
+            Toggle(title, isOn: $isOn)
                 .toggleStyle(PillSwitch())
                 .labelsHidden()
         }
@@ -102,6 +105,7 @@ struct SettingToggle<Glyph: View>: View {
 
 /// Row that navigates into a sub-panel.
 struct NavRow<Glyph: View>: View {
+    @Environment(\.colorSchemeContrast) private var contrast
     let title: String
     let subtitle: String
     let action: () -> Void
@@ -114,6 +118,7 @@ struct NavRow<Glyph: View>: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Palette.claude)
                     .frame(width: 26, height: 26)
+                    .accessibilityHidden(true)
                     .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
                         .fill(Palette.claude.opacity(0.14)))
                 VStack(alignment: .leading, spacing: 1) {
@@ -123,7 +128,7 @@ struct NavRow<Glyph: View>: View {
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.right")
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(contrast == .increased ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tertiary))
             }
             .padding(.vertical, 2)
             .contentShape(Rectangle())
@@ -158,10 +163,13 @@ struct LabeledPicker<Value: Hashable>: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
                 }
             }
             .padding(2)
             .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.primary.opacity(0.06)))
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(title)
         }
     }
 }
@@ -173,55 +181,11 @@ struct SectionLabel: View {
             .font(.system(size: 10, weight: .semibold))
             .textCase(.uppercase)
             .tracking(0.8)
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(.secondary)
             .padding(.top, 2)
     }
 }
 
-
-// MARK: - Small-size icon tiles
-
-struct TileSpec: Identifiable {
-    let id: String
-    let help: String
-    var active = false
-    let glyph: AnyView
-    let action: () -> Void
-}
-
-/// Icon-only grid for the small widget; hovering shows what each tile does.
-struct TileGrid: View {
-    let tiles: [TileSpec]
-    @State private var hovered: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(30), spacing: 6), count: 4),
-                      alignment: .leading, spacing: 6) {
-                ForEach(tiles) { t in
-                    Button(action: t.action) {
-                        t.glyph
-                            .font(.system(size: 12, weight: .semibold))
-                            .frame(width: 30, height: 30)
-                            .foregroundStyle(t.active ? Palette.claude : Color.secondary)
-                            .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(t.active ? Palette.claude.opacity(0.18) : Color.primary.opacity(0.07)))
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .help(t.help)
-                    .onHover { h in
-                        if h { hovered = t.id } else if hovered == t.id { hovered = nil }
-                    }
-                }
-            }
-            Text(tiles.first { $0.id == hovered }?.help ?? "Hover an icon to see what it does.")
-                .font(.system(size: 10))
-                .foregroundStyle(hovered == nil ? .tertiary : .secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-}
 
 func onOff(_ b: Bool) -> String { b ? "on" : "off" }
 
@@ -230,21 +194,17 @@ func onOff(_ b: Bool) -> String { b ? "on" : "off" }
 struct SettingsPanel: View {
     @ObservedObject var store: UsageStore
     let nav: Nav
-    let compact: Bool
-    /// Icon-only tab bar (small and medium widgets, which are short).
-    var iconTabs: Bool? = nil
     let allowSize: Bool
     var onLevelChange: (Bool) -> Void
     var onSizeChange: (Bool) -> Void
     @AppStorage("settingsTab") var tab = 0
 
     static let tabs: [(title: String, short: String, icon: String)] = [
-        ("Appearance", "Appearance", "paintpalette"), ("Alerts", "Alerts", "bell"),
-        ("Data", "Data", "chart.pie"), ("About & privacy", "About", "info.circle"),
+        ("Rings", "Rings", "circle.dashed"), ("Widget", "Widget", "paintpalette"),
+        ("Alerts", "Alerts", "bell"), ("Data", "Data", "chart.pie"), ("About & privacy", "About", "info.circle"),
     ]
 
     var body: some View {
-        let compact = iconTabs ?? self.compact
         VStack(alignment: .leading, spacing: 8) {
             // Preferences-style toolbar: icon above label, selected item highlighted.
             VStack(spacing: 6) {
@@ -252,29 +212,28 @@ struct SettingsPanel: View {
                     Button(action: nav.pop) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 10, weight: .bold))
-                            .frame(width: 20, height: compact ? 26 : 38)
+                            .frame(width: 20, height: 38)
                             .foregroundStyle(Color.secondary)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .help("Back to widget")
+                    .accessibilityLabel("Back to widget")
                     Spacer(minLength: 0)
                     ForEach(Self.tabs.indices, id: \.self) { i in
                         let selected = tab == i
                         Button { withAnimation(.easeOut(duration: 0.15)) { tab = i } } label: {
                             VStack(spacing: 2) {
                                 Image(systemName: Self.tabs[i].icon)
-                                    .font(.system(size: compact ? 13 : 15, weight: .regular))
+                                    .font(.system(size: 15, weight: .regular))
                                     .frame(height: 18)
-                                if !compact {
-                                    Text(Self.tabs[i].short)
-                                        .font(.system(size: 10, weight: selected ? .semibold : .regular))
-                                        .lineLimit(1)
-                                        .fixedSize()
-                                }
+                                Text(Self.tabs[i].short)
+                                    .font(.system(size: 10, weight: selected ? .semibold : .regular))
+                                    .lineLimit(1)
+                                    .fixedSize()
                             }
                             .foregroundStyle(selected ? Palette.claude : Color.secondary)
-                            .frame(width: compact ? 26 : 66)   // equal-width tabs
+                            .frame(width: 58)   // equal-width tabs (five fit the large widget)
                             .padding(.vertical, 4)
                             .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
                                 .fill(selected ? Color.primary.opacity(0.09) : Color.clear))
@@ -282,6 +241,8 @@ struct SettingsPanel: View {
                         }
                         .buttonStyle(.plain)
                         .help(Self.tabs[i].title)
+                        .accessibilityLabel(Self.tabs[i].title)
+                        .accessibilityAddTraits(selected ? .isSelected : [])
                         Spacer(minLength: 0)
                     }
                 }
@@ -289,211 +250,62 @@ struct SettingsPanel: View {
             }
 
             switch tab {
-            case 1: AlertsPanel(nav: nav, compact: self.compact, showHeader: false)
-            case 2: DataPanel(store: store, nav: nav, compact: self.compact, showHeader: false)
-            case 3: AboutPanel(nav: nav, compact: self.compact, showHeader: false, store: store)
-            default: AppearancePanel(nav: nav, allowSize: allowSize, onLevelChange: onLevelChange,
-                                     onSizeChange: onSizeChange, small: self.compact, showHeader: false)
+            case 1: AppearancePanel(nav: nav, allowSize: allowSize, onLevelChange: onLevelChange,
+                                    onSizeChange: onSizeChange, showHeader: false)
+            case 2: AlertsPanel(nav: nav, showHeader: false)
+            case 3: DataPanel(store: store, nav: nav, showHeader: false)
+            case 4: AboutPanel(nav: nav, showHeader: false, store: store)
+            default: RingsPanel()
             }
         }
     }
 }
 
-// MARK: - Appearance
+// MARK: - Rings
 
-struct AppearancePanel: View {
-    let nav: Nav
-    let allowSize: Bool
-    var onLevelChange: (Bool) -> Void
-    var onSizeChange: (Bool) -> Void
-
-    @AppStorage("theme") var theme = 0
-    @AppStorage("widgetStyle") var widgetStyle = 0
-    @AppStorage(WidgetSize.key) var sizeRaw = WidgetSize.current.rawValue
-    @AppStorage("shrinkDown") var shrinkDown = false     // large ↔ medium: keep the bottom edge
-    @AppStorage("shrinkRight") var shrinkRight = false   // medium ↔ small: keep the right edge
+/// Everything about the rings themselves and the notes under them.
+struct RingsPanel: View {
     @AppStorage("showPaceMarker") var showPaceMarker = true
     @AppStorage("segmentedRings") var segmentedRings = true
     @AppStorage("weeklySplit") var weeklySplit = 0
     @AppStorage("showScoped") var showScoped = true
     @AppStorage("showPaceNote") var showPaceNote = true
     @AppStorage("showForecast") var showForecast = true
-    @AppStorage("showWidget") var showWidget = true
-    @AppStorage("menuBar") var menuBar = true
-    @AppStorage("floatOnTop") var floatOnTop = false
-    /// Mirrors SMAppService (never stored); re-read when the panel appears.
-    @State private var openAtLogin = LoginItem.isOn
     @State private var custom: [Double] = WeekBudget.custom
 
-    var small = false
-
-    var showHeader = true
-
     var body: some View {
-        if small {
+        ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 10) {
-                if showHeader { PanelHeader(title: "Appearance", onBack: nav.pop) }
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        TileGrid(tiles: tiles)
+                SectionLabel(text: "Rings")
+                SettingToggle(title: "Pace marker", isOn: $showPaceMarker) { PaceGlyph() }
+                SettingToggle(title: "Segmented rings", isOn: $segmentedRings) { SegmentGlyph() }
+                // Sub-option of Segmented rings: how the weekly ring's slices (and pace) are split.
+                HStack(alignment: .top, spacing: 8) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Palette.claude.opacity(0.35))
+                        .frame(width: 2)
+                        .padding(.leading, 7)
+                    VStack(alignment: .leading, spacing: 6) {
+                        LabeledPicker(title: "Weekly ring slices", selection: $weeklySplit,
+                                      options: [("7 days", 0), ("Weekdays", 1), ("Custom", 2), ("Rest evenly", 3)])
+                        Text(weeklySplit == 0 ? "Even split: about 14% per day."
+                             : weeklySplit == 1 ? "5 slices, 20% per weekday; weekends get no budget."
+                             : weeklySplit == 2 ? "Set each day's share. Slices and pace follow it."
+                             : "What's left is shared evenly by today and the days still to come. Days already gone become one slice of what they used.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                         if weeklySplit == 2 { customEditor }
                     }
                 }
+                .opacity(segmentedRings ? 1 : 0.5)
+                SettingToggle(title: "Model limit bar", isOn: $showScoped) { Image(systemName: "chart.bar.fill") }
+
+                SectionLabel(text: "Notes")
+                SettingToggle(title: "Pace note", isOn: $showPaceNote) { Image(systemName: "checkmark.circle") }
+                SettingToggle(title: "Run-out estimate", isOn: $showForecast) { Image(systemName: "hourglass") }
             }
-            .onAppear { openAtLogin = LoginItem.isOn }
-        } else {
-            fullBody
-        }
-    }
-
-    var tiles: [TileSpec] {
-        let themeNames = ["Auto", "Light", "Dark"], themeIcons = ["circle.lefthalf.filled", "sun.max.fill", "moon.fill"]
-        let splitNames = ["7 even days", "Weekdays only (5 slices)", "Custom per day"]
-        let splitGlyphs: [AnyView] = [AnyView(Text("7").font(.system(size: 13, weight: .bold, design: .rounded))),
-                                      AnyView(Text("5").font(.system(size: 13, weight: .bold, design: .rounded))),
-                                      AnyView(Image(systemName: "slider.horizontal.3"))]
-        var t: [TileSpec] = [
-            TileSpec(id: "theme", help: "Theme: \(themeNames[theme]). Tap for \(themeNames[(theme + 1) % 3]).",
-                     active: true, glyph: AnyView(Image(systemName: themeIcons[theme])),
-                     action: { theme = (theme + 1) % 3 }),
-        ]
-        let styleNames = ["Automatic", "Full color", "Monochrome"], styleIcons = ["wand.and.sparkles", "paintpalette.fill", "circle.dotted.circle"]
-        t.append(TileSpec(id: "style", help: "Widget style: \(styleNames[widgetStyle]). Tap for \(styleNames[(widgetStyle + 1) % 3]).",
-                          active: true, glyph: AnyView(Image(systemName: styleIcons[widgetStyle])),
-                          action: { widgetStyle = (widgetStyle + 1) % 3 }))
-        if allowSize {
-            for target in [WidgetSize.medium, .large] {
-                t.append(TileSpec(id: "size\(target.rawValue)", help: "Switch to the \(target.name.lowercased()) widget.",
-                                  glyph: AnyView(SizeGlyph(size: target)),
-                                  action: { WidgetSize.noteChange(from: sizeRaw, to: target.rawValue)
-                                            withAnimation(WidgetSize.changeAnimation) { sizeRaw = target.rawValue }
-                                            onSizeChange(true) }))
-            }
-            t.append(TileSpec(id: "shrinkV", help: "Large → medium shrinks \(shrinkDown ? "down" : "up"). Tap to switch.",
-                              active: true, glyph: AnyView(ShrinkGlyph(vertical: true, toEnd: shrinkDown, scale: 0.8)),
-                              action: { shrinkDown.toggle() }))
-            t.append(TileSpec(id: "shrinkH", help: "Medium → small shrinks \(shrinkRight ? "right" : "left"). Tap to switch.",
-                              active: true, glyph: AnyView(ShrinkGlyph(vertical: false, toEnd: shrinkRight, scale: 0.8)),
-                              action: { shrinkRight.toggle() }))
-        }
-        t += [
-            TileSpec(id: "pace", help: "Pace marker: \(onOff(showPaceMarker)). White tick showing where you should be by now.",
-                     active: showPaceMarker, glyph: AnyView(PaceGlyph()), action: { showPaceMarker.toggle() }),
-            TileSpec(id: "seg", help: "Segmented rings: \(onOff(segmentedRings)). Split session into hours, week into days.",
-                     active: segmentedRings, glyph: AnyView(SegmentGlyph()), action: { segmentedRings.toggle() }),
-            TileSpec(id: "split", help: "Weekly ring slices: \(splitNames[weeklySplit]). Tap for \(splitNames[(weeklySplit + 1) % 3]).",
-                     active: true, glyph: splitGlyphs[weeklySplit], action: { weeklySplit = (weeklySplit + 1) % 3 }),
-            TileSpec(id: "fable", help: "Model limit bar: \(onOff(showScoped)). Shown in the medium and large widgets.",
-                     active: showScoped, glyph: AnyView(Image(systemName: "chart.bar.fill")), action: { showScoped.toggle() }),
-            TileSpec(id: "paceNote", help: "Pace note: \(onOff(showPaceNote)). \"On pace\", \"12% to spare\" and so on.",
-                     active: showPaceNote, glyph: AnyView(Image(systemName: "checkmark.circle")), action: { showPaceNote.toggle() }),
-            TileSpec(id: "forecast", help: "Run-out estimate: \(onOff(showForecast)). When you'll hit the limit if you're ahead of pace.",
-                     active: showForecast, glyph: AnyView(Image(systemName: "hourglass")), action: { showForecast.toggle() }),
-            TileSpec(id: "menubar", help: "Menu bar gauge: \(onOff(menuBar)).",
-                     active: menuBar, glyph: AnyView(Image(systemName: "menubar.rectangle")), action: { menuBar.toggle() }),
-            TileSpec(id: "float", help: "Float above windows: \(onOff(floatOnTop)). Off keeps it on the desktop.",
-                     active: floatOnTop, glyph: AnyView(Image(systemName: "square.stack")),
-                     action: { floatOnTop.toggle(); onLevelChange(floatOnTop) }),
-            TileSpec(id: "login", help: LoginItem.translocated ? "Open at Login: move Claude Usage to Applications first."
-                        : "Open at Login: \(onOff(openAtLogin))\(LoginItem.status == .requiresApproval ? ", waiting for approval in System Settings → Login Items" : "").",
-                     active: openAtLogin, glyph: AnyView(Image(systemName: "power")),
-                     action: {
-                         guard !LoginItem.translocated else { return }
-                         try? LoginItem.set(!openAtLogin)
-                         openAtLogin = LoginItem.isOn
-                     }),
-        ]
-        return t
-    }
-
-    var fullBody: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if showHeader { PanelHeader(title: "Appearance", onBack: nav.pop) }
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 10) {
-                    LabeledPicker(title: "Theme", selection: $theme,
-                                  options: [("Auto", 0), ("Light", 1), ("Dark", 2)])
-                    LabeledPicker(title: "Widget style", selection: $widgetStyle,
-                                  options: [("Automatic", 0), ("Full color", 1), ("Monochrome", 2)])
-                    Text(widgetStyle == 0 ? "Fades like desktop widgets while you're in an app; full color when you click the desktop."
-                         : widgetStyle == 1 ? "Always full color." : "Always translucent and monochrome.")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if allowSize {
-                        LabeledPicker(title: "Size", selection: Binding(
-                            get: { sizeRaw }, set: { v in
-                                WidgetSize.noteChange(from: sizeRaw, to: v)
-                                withAnimation(WidgetSize.changeAnimation) { sizeRaw = v }
-                                onSizeChange(true) }),
-                                      options: WidgetSize.allCases.map { ($0.name, $0.rawValue) })
-                        // Which way it shrinks (growing goes back the same way).
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Resize direction").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-                            HStack(alignment: .top, spacing: 18) {
-                                VStack(spacing: 3) {
-                                    IconChoice(selection: $shrinkDown, options: [
-                                        (false, "Large → medium shrinks up", AnyView(ShrinkGlyph(vertical: true, toEnd: false))),
-                                        (true, "Large → medium shrinks down", AnyView(ShrinkGlyph(vertical: true, toEnd: true))),
-                                    ])
-                                    Text("Large ↔ medium").font(.system(size: 9)).foregroundStyle(.tertiary)
-                                }
-                                VStack(spacing: 3) {
-                                    IconChoice(selection: $shrinkRight, options: [
-                                        (false, "Medium → small shrinks left", AnyView(ShrinkGlyph(vertical: false, toEnd: false))),
-                                        (true, "Medium → small shrinks right", AnyView(ShrinkGlyph(vertical: false, toEnd: true))),
-                                    ])
-                                    Text("Medium ↔ small").font(.system(size: 9)).foregroundStyle(.tertiary)
-                                }
-                            }
-                        }
-                    }
-
-                    SectionLabel(text: "Rings")
-                    SettingToggle(title: "Pace marker", isOn: $showPaceMarker) { PaceGlyph() }
-                    SettingToggle(title: "Segmented rings", isOn: $segmentedRings) { SegmentGlyph() }
-                    // Sub-option of Segmented rings: how the weekly ring's slices (and pace) are split.
-                    HStack(alignment: .top, spacing: 8) {
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(Palette.claude.opacity(0.35))
-                            .frame(width: 2)
-                            .padding(.leading, 7)
-                        VStack(alignment: .leading, spacing: 6) {
-                            LabeledPicker(title: "Weekly ring slices", selection: $weeklySplit,
-                                          options: [("7 days", 0), ("Weekdays", 1), ("Custom", 2)])
-                            Text(weeklySplit == 0 ? "Even split: about 14% per day."
-                                 : weeklySplit == 1 ? "5 slices, 20% per weekday; weekends get no budget."
-                                 : "Set each day's share. Slices and pace follow it.")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                            if weeklySplit == 2 { customEditor }
-                        }
-                    }
-                    .opacity(segmentedRings ? 1 : 0.5)
-                    SettingToggle(title: "Model limit bar", isOn: $showScoped) { Image(systemName: "chart.bar.fill") }
-
-                    SectionLabel(text: "Notes")
-                    SettingToggle(title: "Pace note", isOn: $showPaceNote) { Image(systemName: "checkmark.circle") }
-                    SettingToggle(title: "Run-out estimate", isOn: $showForecast) { Image(systemName: "hourglass") }
-
-                    SectionLabel(text: "Window")
-                    SettingToggle(title: "Desktop widget", isOn: Binding(
-                        get: { showWidget }, set: { v in if !v { menuBar = true }; showWidget = v })) {
-                        Image(systemName: "rectangle.on.rectangle")
-                    }
-                    SettingToggle(title: "Menu bar gauge", isOn: Binding(
-                        get: { menuBar }, set: { v in if !v { showWidget = true }; menuBar = v })) {
-                        Image(systemName: "menubar.rectangle")
-                    }
-                    SettingToggle(title: "Float above windows", isOn: Binding(
-                        get: { floatOnTop }, set: { floatOnTop = $0; onLevelChange($0) })) {
-                        Image(systemName: "square.stack")
-                    }
-                    OpenAtLoginToggle()
-                }
-                .padding(.bottom, 2)
-            }
+            .padding(.bottom, 2)
         }
     }
 
@@ -505,18 +317,14 @@ struct AppearancePanel: View {
                     Text(WeekBudget.dayNames[i])
                         .font(.system(size: 11, weight: .medium))
                         .frame(width: 30, alignment: .leading)
-                    if small {
-                        Spacer(minLength: 0)
-                    } else {
-                        GeometryReader { g in
-                            ZStack(alignment: .leading) {
-                                Capsule().fill(Palette.claude.opacity(0.14))
-                                Capsule().fill(Palette.claude)
-                                    .frame(width: g.size.width * min(custom[i] / max(total, 1), 1))
-                            }
+                    GeometryReader { g in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Palette.claude.opacity(0.14))
+                            Capsule().fill(Palette.claude)
+                                .frame(width: g.size.width * min(custom[i] / max(total, 1), 1))
                         }
-                        .frame(height: 5)
                     }
+                    .frame(height: 5)
                     stepper("minus") { set(i, custom[i] - 1) }
                     Text("\(Int(custom[i]))%")
                         .font(.system(size: 11, weight: .semibold, design: .rounded))
@@ -530,7 +338,7 @@ struct AppearancePanel: View {
                     .font(.system(size: 10, weight: .semibold))
                     .monospacedDigit()
                     .foregroundStyle(Int(total) == 100 ? Color.secondary : Palette.ember)
-                if Int(total) != 100 && !small {
+                if Int(total) != 100 {
                     Text("(scaled to 100%)").font(.system(size: 10)).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -561,7 +369,97 @@ struct AppearancePanel: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(icon == "minus" ? "Decrease" : "Increase")
         .buttonRepeatBehavior(.enabled)
+    }
+}
+
+// MARK: - Widget (look, size, where it shows)
+
+struct AppearancePanel: View {
+    let nav: Nav
+    let allowSize: Bool
+    var onLevelChange: (Bool) -> Void
+    var onSizeChange: (Bool) -> Void
+
+    @AppStorage("theme") var theme = 0
+    @AppStorage("widgetStyle") var widgetStyle = 0
+    @AppStorage(WidgetSize.key) var sizeRaw = WidgetSize.current.rawValue
+    @AppStorage("shrinkDown") var shrinkDown = false     // large ↔ medium: keep the bottom edge
+    @AppStorage("shrinkRight") var shrinkRight = false   // medium ↔ small: keep the right edge
+    @AppStorage("showWidget") var showWidget = true
+    @AppStorage("menuBar") var menuBar = true
+    @AppStorage("floatOnTop") var floatOnTop = false
+
+    var showHeader = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if showHeader { PanelHeader(title: "Widget", onBack: nav.pop) }
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 10) {
+                    // Pairs side by side so the whole tab needs little scrolling.
+                    HStack(alignment: .top, spacing: 12) {
+                        LabeledPicker(title: "Theme", selection: $theme,
+                                      options: [("Auto", 0), ("Light", 1), ("Dark", 2)])
+                        LabeledPicker(title: "Color style", selection: $widgetStyle,
+                                      options: [("Auto", 0), ("Color", 1), ("Mono", 2)])
+                    }
+                    Text(widgetStyle == 0 ? "Color style Auto: fades like desktop widgets while you're in an app; full color when you click the desktop."
+                         : widgetStyle == 1 ? "Always full color." : "Always translucent and monochrome.")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if allowSize {
+                        HStack(alignment: .top, spacing: 12) {
+                            LabeledPicker(title: "Size", selection: Binding(
+                                get: { sizeRaw }, set: { v in
+                                    WidgetSize.noteChange(from: sizeRaw, to: v)
+                                    withAnimation(WidgetSize.changeAnimation) { sizeRaw = v }
+                                    onSizeChange(true) }),
+                                          options: WidgetSize.allCases.map { ($0.name, $0.rawValue) })
+                            // Which way it shrinks (growing goes back the same way).
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Resize direction").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+                                HStack(alignment: .top, spacing: 8) {
+                                    VStack(spacing: 3) {
+                                        IconChoice(selection: $shrinkDown, options: [
+                                            (false, "Large → medium shrinks up", AnyView(ShrinkGlyph(vertical: true, toEnd: false))),
+                                            (true, "Large → medium shrinks down", AnyView(ShrinkGlyph(vertical: true, toEnd: true))),
+                                        ])
+                                        Text("Large ↔ medium").font(.system(size: 10)).foregroundStyle(.secondary)
+                                    }
+                                    VStack(spacing: 3) {
+                                        IconChoice(selection: $shrinkRight, options: [
+                                            (false, "Medium → small shrinks left", AnyView(ShrinkGlyph(vertical: false, toEnd: false))),
+                                            (true, "Medium → small shrinks right", AnyView(ShrinkGlyph(vertical: false, toEnd: true))),
+                                        ])
+                                        Text("Medium ↔ small").font(.system(size: 10)).foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                            .fixedSize()
+                        }
+                    }
+
+                    SectionLabel(text: "Window")
+                    SettingToggle(title: "Desktop widget", isOn: Binding(
+                        get: { showWidget }, set: { v in if !v { menuBar = true }; showWidget = v })) {
+                        Image(systemName: "rectangle.on.rectangle")
+                    }
+                    SettingToggle(title: "Menu bar gauge", isOn: Binding(
+                        get: { menuBar }, set: { v in if !v { showWidget = true }; menuBar = v })) {
+                        Image(systemName: "menubar.rectangle")
+                    }
+                    SettingToggle(title: "Float above windows", isOn: Binding(
+                        get: { floatOnTop }, set: { floatOnTop = $0; onLevelChange($0) })) {
+                        Image(systemName: "square.stack")
+                    }
+                    OpenAtLoginToggle()
+                }
+                .padding(.bottom, 2)
+            }
+        }
     }
 }
 
@@ -569,7 +467,6 @@ struct AppearancePanel: View {
 
 struct AlertsPanel: View {
     let nav: Nav
-    var compact = false
     var showHeader = true
     @AppStorage("sessionResetAlert") var sessionResetAlert = true
     @AppStorage("resetReminders") var resetReminders = true
@@ -586,7 +483,7 @@ struct AlertsPanel: View {
                         // Otherwise every alert below would fail silently.
                         HStack(spacing: 6) {
                             Image(systemName: "bell.slash").foregroundStyle(Palette.ember)
-                            Text(compact ? "Notifications off" : "Notifications are off for Claude Usage")
+                            Text("Notifications are off for Claude Usage")
                                 .lineLimit(1).minimumScaleFactor(0.8)
                             Spacer(minLength: 4)
                             Button("Turn On…") { NSWorkspace.shared.open(NotificationAccess.settingsURL) }
@@ -598,15 +495,15 @@ struct AlertsPanel: View {
                     }
                     SectionLabel(text: "Usage alerts")
                     ForEach(LimitAlerts.groups, id: \.key) { g in
-                        ThresholdEditor(key: g.key, title: g.title, subtitle: g.subtitle, compact: compact)
+                        ThresholdEditor(key: g.key, title: g.title, subtitle: g.subtitle)
                     }
                     SectionLabel(text: "Other")
-                    SettingToggle(title: compact ? "Session reset" : "Session reset (if 50%+ used)",
+                    SettingToggle(title: "Session reset (if 50%+ used)",
                                   isOn: Binding(get: { sessionResetAlert }, set: {
                                       sessionResetAlert = $0
                                       if $0 { NotificationAccess.requestIfUndetermined() }
                                   })) { SessionResetGlyph() }
-                    ReminderEditor(compact: compact)
+                    ReminderEditor()
                     NavRow(title: "Saved resets", subtitle: resetCount > 0 ? "\(resetCount) saved" : "None tracked",
                            action: { nav.push(.resets) }) { SessionResetGlyph().scaleEffect(0.85) }
                     // Off = no daily GitHub check at all (About can still check by hand).
@@ -637,7 +534,6 @@ struct ThresholdEditor: View {
     let key: String
     let title: String
     let subtitle: String
-    let compact: Bool
     @State private var thresholds: [Int] = []
     @State private var enabled = true
     @State private var adding = false
@@ -648,12 +544,10 @@ struct ThresholdEditor: View {
             HStack(spacing: 8) {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(title).font(.system(size: 12, weight: .semibold))
-                    if !compact {
-                        Text(subtitle).font(.system(size: 10)).foregroundStyle(.secondary)
-                    }
+                    Text(subtitle).font(.system(size: 10)).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 4)
-                Toggle("", isOn: Binding(get: { enabled }, set: {
+                Toggle(title, isOn: Binding(get: { enabled }, set: {
                     enabled = $0; save()
                     if $0 { NotificationAccess.requestIfUndetermined() }
                 }))
@@ -670,6 +564,7 @@ struct ThresholdEditor: View {
                             }
                             .buttonStyle(.plain)
                             .help("Remove \(t)% alert")
+                            .accessibilityLabel("Remove \(t)% alert")
                         }
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Palette.claude)
@@ -693,6 +588,7 @@ struct ThresholdEditor: View {
                         }
                         .buttonStyle(.plain)
                         .help("Add an alert threshold")
+                        .accessibilityLabel("Add an alert threshold")
                     }
                 }
                 if adding {
@@ -711,6 +607,7 @@ struct ThresholdEditor: View {
                             Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Cancel")
                     }
                 }
                 if thresholds.isEmpty && !adding {
@@ -741,13 +638,13 @@ struct ThresholdEditor: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(icon == "minus" ? "Decrease" : "Increase")
         .buttonRepeatBehavior(.enabled)
     }
 }
 
 /// When to be reminded before a saved reset expires: removable chips plus "+" (hours or days).
 struct ReminderEditor: View {
-    let compact: Bool
     @AppStorage("resetReminders") var enabled = true
     @State private var leads: [Int] = []
     @State private var adding = false
@@ -758,13 +655,11 @@ struct ReminderEditor: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(compact ? "Reset expiry" : "Saved-reset reminders").font(.system(size: 12, weight: .semibold))
-                    if !compact {
-                        Text("How long before a saved reset expires").font(.system(size: 10)).foregroundStyle(.secondary)
-                    }
+                    Text("Saved-reset reminders").font(.system(size: 12, weight: .semibold))
+                    Text("How long before a saved reset expires").font(.system(size: 10)).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 4)
-                Toggle("", isOn: Binding(get: { enabled }, set: {
+                Toggle("Saved-reset reminders", isOn: Binding(get: { enabled }, set: {
                     enabled = $0
                     if $0 { NotificationAccess.requestIfUndetermined() }
                 }))
@@ -781,6 +676,7 @@ struct ReminderEditor: View {
                             }
                             .buttonStyle(.plain)
                             .help("Remove the \(ResetReminder.leadText(l, long: true)) reminder")
+                            .accessibilityLabel("Remove the \(ResetReminder.leadText(l, long: true)) reminder")
                         }
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Palette.claude)
@@ -800,6 +696,7 @@ struct ReminderEditor: View {
                         }
                         .buttonStyle(.plain)
                         .help("Add a reminder")
+                        .accessibilityLabel("Add a reminder")
                     }
                 }
                 if adding {
@@ -819,6 +716,7 @@ struct ReminderEditor: View {
                         }
                         .buttonStyle(.plain)
                         .help("Switch between hours and days")
+                        .accessibilityLabel("Switch between hours and days")
                         Spacer(minLength: 2)
                         PillButton(title: "Add", prominent: true, disabled: leads.contains(secs)) {
                             leads.append(secs); adding = false; save()
@@ -827,6 +725,7 @@ struct ReminderEditor: View {
                             Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Cancel")
                     }
                 }
                 if leads.isEmpty && !adding {
@@ -891,7 +790,6 @@ struct SessionResetGlyph: View {
 struct DataPanel: View {
     @ObservedObject var store: UsageStore
     let nav: Nav
-    let compact: Bool
 
     var showHeader = true
 
@@ -902,7 +800,7 @@ struct DataPanel: View {
         let busiest = hours.indices.max { hours[$0] < hours[$1] }
 
         VStack(alignment: .leading, spacing: 8) {
-            if showHeader { PanelHeader(title: compact ? "Today" : "Data", onBack: nav.pop) }
+            if showHeader { PanelHeader(title: "Data", onBack: nav.pop) }
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 5) {
@@ -910,27 +808,21 @@ struct DataPanel: View {
                             Text("Updated \(age)")
                                 .font(.system(size: 10, weight: .medium))
                                 .monospacedDigit()
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(.secondary)
                         }
                         RefreshButton(store: store)
                         Spacer(minLength: 0)
                     }
-                    if compact {
-                        RoseDiagram(values: hours, currentHour: nowHour, diameter: 96,
+                    HStack(alignment: .center, spacing: 6) {
+                        RoseDiagram(values: hours, currentHour: nowHour, diameter: 128,
                                     centerValue: "\(Int(total.rounded()))%", centerLabel: "today")
-                            .frame(maxWidth: .infinity)
-                    } else {
-                        HStack(alignment: .center, spacing: 6) {
-                            RoseDiagram(values: hours, currentHour: nowHour, diameter: 128,
-                                        centerValue: "\(Int(total.rounded()))%", centerLabel: "today")
-                            VStack(alignment: .leading, spacing: 8) {
-                                if let b = busiest, hours[b] > 0 {
-                                    stat("Busiest hour today", hourLabel(b), note: "\(Int(hours[b].rounded()))%")
-                                }
-                                stat("This hour", "\(Int(hours[nowHour].rounded()))%")
+                        VStack(alignment: .leading, spacing: 8) {
+                            if let b = busiest, hours[b] > 0 {
+                                stat("Busiest hour today", hourLabel(b), note: "\(Int(hours[b].rounded()))%")
                             }
-                            Spacer(minLength: 0)
+                            stat("This hour", "\(Int(hours[nowHour].rounded()))%")
                         }
+                        Spacer(minLength: 0)
                     }
                     Text("Session usage per hour today (centre: total, as % of one session), recorded while the widget runs. Midnight at top.")
                         .font(.system(size: 10))
@@ -950,8 +842,9 @@ struct DataPanel: View {
         }
     }
 
-    /// Always "12 PM", "9 AM" etc., even on 24-hour-clock systems, so it's never ambiguous.
+    /// "2 PM" or "14:00", following the Mac's 12/24-hour setting (like the forecast times).
     func hourLabel(_ h: Int) -> String {
+        if uses24Hour { return "\(h):00" }
         let h12 = h % 12 == 0 ? 12 : h % 12
         return "\(h12) \(h < 12 ? "AM" : "PM")"
     }
@@ -971,7 +864,6 @@ struct DataPanel: View {
 
 struct ResetPanel: View {
     let now: Date
-    let compact: Bool
     let nav: Nav
 
     @AppStorage("resetCount") var count = 0
@@ -981,7 +873,7 @@ struct ResetPanel: View {
         let remaining = expiry - now.timeIntervalSince1970
 
         VStack(alignment: .leading, spacing: 10) {
-            PanelHeader(title: compact ? "Resets" : "Saved limit resets", onBack: nav.pop)
+            PanelHeader(title: "Saved limit resets", onBack: nav.pop)
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 8) {
@@ -1012,11 +904,6 @@ struct ResetPanel: View {
                                 ResetReminder.check()
                             }
                         }
-                    } else if compact {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Expires").font(.system(size: 12))
-                            picker
-                        }
                     } else {
                         HStack {
                             Text("Expires").font(.system(size: 12))
@@ -1039,17 +926,15 @@ struct ResetPanel: View {
                     HStack {
                         PillButton(title: "Used one", disabled: count == 0) { count = max(count - 1, 0) }
                         Spacer()
-                        PillButton(title: compact ? "Use ↗" : "Open usage ↗", prominent: true) {
+                        PillButton(title: "Open usage ↗", prominent: true) {
                             NSWorkspace.shared.open(ResetReminder.settingsURL)
                         }
                     }
 
-                    if !compact {
-                        Text("Claude's usage API doesn't report resets, so enter them from Settings → Usage. Reminders arrive \(ResetReminder.leadsSummary) before expiry (change in Alerts).")
-                            .font(.system(size: 10.5))
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                    Text("Claude's usage API doesn't report resets, so enter them from Settings → Usage. Reminders arrive \(ResetReminder.leadsSummary) before expiry (change in Alerts).")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -1065,6 +950,7 @@ struct ResetPanel: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(icon == "minus" ? "Decrease" : "Increase")
     }
 }
 
@@ -1072,7 +958,6 @@ struct ResetPanel: View {
 
 struct AboutPanel: View {
     let nav: Nav
-    let compact: Bool
 
     var showHeader = true
 
@@ -1080,10 +965,10 @@ struct AboutPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if showHeader { PanelHeader(title: compact ? "About" : "About & privacy", onBack: nav.pop) }
+            if showHeader { PanelHeader(title: "About & privacy", onBack: nav.pop) }
             ScrollView(showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 12) {
-                    VersionSection(compact: compact)
+                    VersionSection()
                     Divider().padding(.vertical, 2)
                     section("Unofficial app", icon: "exclamationmark.shield",
                             "Claude Usage is an independent, unofficial project. It is not made by, affiliated with, or endorsed by Anthropic. \"Claude\" and \"Anthropic\" are trademarks of Anthropic, PBC, used here only to describe what the app shows.")
@@ -1114,10 +999,10 @@ struct AboutPanel: View {
     func section(_ title: String, icon: String, _ text: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Label(title, systemImage: icon)
-                .font(.system(size: compact ? 11 : 12, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Palette.claude)
             Text(text)
-                .font(.system(size: compact ? 10 : 11))
+                .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -1170,6 +1055,8 @@ struct IconChoice<Value: Hashable>: View {
                 }
                 .buttonStyle(.plain)
                 .help(o.1)
+                .accessibilityLabel(o.1)
+                .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
         .padding(2)

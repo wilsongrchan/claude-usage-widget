@@ -84,3 +84,47 @@ func testGrid() {
         expectEqual(gridLattice(0, len: 500, lo: 0, hi: 300, pitch: 180), [0], "too small: just lo")
     }
 }
+
+func testDayNames() {
+    suite("Weekday names follow the Mac's language, Monday first") {
+        let s = Calendar.current.shortWeekdaySymbols
+        expectEqual(WeekBudget.dayNames.count, 7)
+        expectEqual(WeekBudget.dayNames.first, s[1], "Monday first")
+        expectEqual(WeekBudget.dayNames.last, s[0], "Sunday last")
+    }
+}
+
+func testRestEvenly() {
+    // Window: Mon 16 Nov 00:00 UTC → Mon 23 Nov. Thursday noon is slot 3.
+    let reset = date(2026, 11, 23)
+    suite("WeekBudget: rest evenly") {
+        let b = WeekBudget(resetsAt: reset, now: date(2026, 11, 19, 12), mode: 3, custom: [],
+                           usedBeforeToday: 0.6, calendar: utc)!
+        expectEqual(b.current, 3)
+        expectClose(b.boundaries[1], 0.6, "days gone: one slice of what they used")
+        expectClose(b.boundaries[3], 0.6, "the other past slices are empty")
+        expectClose(b.shares[3], 0.1, "40% left over 4 days")
+        expectClose(b.boundaries[7], 1)
+        expectClose(b.expected, 0.65, "half-way through today: 60% + 5%")
+        let light = WeekBudget(resetsAt: reset, now: date(2026, 11, 19, 12), mode: 3, custom: [],
+                               usedBeforeToday: 0.2, calendar: utc)!
+        expectClose(light.shares[6], 0.2, "used little: 80% over 4 days")
+        let first = WeekBudget(resetsAt: reset, now: date(2026, 11, 16, 6), mode: 3, custom: [],
+                               usedBeforeToday: 0.3, calendar: utc)!
+        expectClose(first.shares[0], 1.0 / 7, "first day: nothing gone yet, 7 even days")
+        let unknown = WeekBudget(resetsAt: reset, now: date(2026, 11, 19, 12), mode: 3, custom: [], calendar: utc)!
+        expectClose(unknown.shares[3], 0.25, "no start reading: what's left is all of it")
+    }
+
+    suite("DayStartLog keeps the first reading of each day slot") {
+        withDefaults { d in
+            DayStartLog.record(weeklyUtil: 55, resetsAt: reset, now: date(2026, 11, 19, 1), defaults: d)
+            DayStartLog.record(weeklyUtil: 70, resetsAt: reset, now: date(2026, 11, 19, 15), defaults: d)
+            expectClose(DayStartLog.usedBeforeToday(resetsAt: reset, now: date(2026, 11, 19, 20), defaults: d), 0.55)
+            expect(DayStartLog.usedBeforeToday(resetsAt: reset, now: date(2026, 11, 20, 2), defaults: d) == nil,
+                   "next day: unknown until its first reading")
+            DayStartLog.record(weeklyUtil: 72, resetsAt: reset, now: date(2026, 11, 20, 2), defaults: d)
+            expectClose(DayStartLog.usedBeforeToday(resetsAt: reset, now: date(2026, 11, 20, 9), defaults: d), 0.72)
+        }
+    }
+}

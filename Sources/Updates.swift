@@ -142,7 +142,7 @@ struct VersionSection: View {
             HStack(spacing: 6) {
                 Label("Version \(AppInfo.version)", systemImage: "app.badge")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Palette.claude)
+                    .foregroundStyle(Palette.claudeText)
                 Spacer(minLength: 4)
                 if updates.newer {
                     PillButton(title: "Download \(updates.latest ?? "")",

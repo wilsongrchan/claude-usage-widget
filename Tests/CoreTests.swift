@@ -97,7 +97,7 @@ func testDayNames() {
 func testRestEvenly() {
     // Window: Mon 16 Nov 00:00 UTC → Mon 23 Nov. Thursday noon is slot 3.
     let reset = date(2026, 11, 23)
-    suite("WeekBudget: rest evenly") {
+    suite("WeekBudget: split remaining") {
         let b = WeekBudget(resetsAt: reset, now: date(2026, 11, 19, 12), mode: 3, custom: [],
                            usedBeforeToday: 0.6, calendar: utc)!
         expectEqual(b.current, 3)

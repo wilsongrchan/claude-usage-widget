@@ -416,13 +416,20 @@ struct AppearancePanel: View {
                         .fixedSize(horizontal: false, vertical: true)
                     if allowSize {
                         HStack(alignment: .top, spacing: 10) {
-                            LabeledPicker(title: "Size", selection: Binding(
-                                get: { sizeRaw }, set: { v in
-                                    WidgetSize.noteChange(from: sizeRaw, to: v)
-                                    withAnimation(WidgetSize.changeAnimation) { sizeRaw = v }
-                                    onSizeChange(true) }),
-                                          options: WidgetSize.allCases.map { ($0.name, $0.rawValue) })
-                                .frame(width: Self.leftColumn)
+                            // Same grid icons as the hover buttons.
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Size").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+                                IconChoice(selection: Binding(
+                                    get: { sizeRaw }, set: { v in
+                                        guard v != sizeRaw else { return }
+                                        WidgetSize.noteChange(from: sizeRaw, to: v)
+                                        withAnimation(WidgetSize.changeAnimation) { sizeRaw = v }
+                                        onSizeChange(true) }),
+                                           options: WidgetSize.allCases.map {
+                                               ($0.rawValue, $0.name, AnyView(SizeGlyph(size: $0).scaleEffect(1.4)))
+                                           })
+                            }
+                            .frame(width: Self.leftColumn, alignment: .leading)
                             // Which way it shrinks (growing goes back the same way).
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Resize direction").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)

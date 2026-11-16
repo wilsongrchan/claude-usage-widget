@@ -4,7 +4,7 @@
 import os, sys; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cutout import cut
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
-large=cut('docs/images/large.png')[0]; med=cut('docs/images/medium.png')[0]; sm=cut('docs/images/small.png')[0]; mono=cut('docs/images/small-mono.png')[0]   # already 2x
+large=cut('docs/images/large.png')[0]; med=cut('docs/images/medium.png')[0]; sm=cut('docs/images/small.png')[0]; mono=cut('docs/images/small-mono.png')[0]
 def font(wt,sz):
     f=ImageFont.truetype('/System/Library/Fonts/SFNS.ttf',sz)
     try: f.set_variation_by_name(wt)
@@ -42,7 +42,7 @@ A_notes=[
  ('Medium',['Both rings side by side'],'l',[(684,164),(RX,164)]),
  ('Small',['Weekly as the outer ring'],'l',[(324,450),(344,450),(344,344),(RX,344)]),
  ('Monochrome',['Fades like native widgets','while you\'re in an app'],'l',[(684,500),(RX,500)]),
- ('Run-out forecast',['When you\'ll hit the limit'],'l',[(398,656),(398,716),(RX,716)]),
+ ('Run-out forecast',['When you\'ll hit the limit'],'l',[(394,655),(394,716),(RX,716)]),
 ]
 B_tiles=[(large,(0,0))]
 B_notes=[   # large widget, cut-out coordinates (688x688)

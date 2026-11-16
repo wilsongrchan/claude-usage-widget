@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Builds ClaudeUsage.app. Usage:
 #   ./build.sh            build into ./build
-#   ./build.sh install    build, copy to ~/Applications, start at login, and launch
+#   ./build.sh install    build, copy to ~/Applications and launch (turn on Open at Login in Settings)
 #   ./build.sh dist       universal (Apple Silicon + Intel) build, zipped with the install
 #                         guide into dist/ClaudeUsage.zip for sharing
 #   ./build.sh test       compile Sources/Core + Tests into a command-line runner and run it
@@ -84,18 +84,14 @@ if [[ "${1:-}" == "install" ]]; then
   mkdir -p "$HOME/Applications"
   rm -rf "$DEST" && cp -R "$APP" "$DEST"
 
+  # Older versions started the app with this LaunchAgent. The app's Open at Login switch
+  # (SMAppService) replaces it; keeping both would start it twice.
   AGENT="$HOME/Library/LaunchAgents/local.claude-usage-widget.plist"
-  mkdir -p "$HOME/Library/LaunchAgents"
-  cat > "$AGENT" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>Label</key><string>local.claude-usage-widget</string>
-  <key>ProgramArguments</key><array><string>$DEST/Contents/MacOS/ClaudeUsage</string></array>
-  <key>RunAtLoad</key><true/>
-</dict></plist>
-PLIST
-  launchctl bootout "gui/$(id -u)" "$AGENT" 2>/dev/null || true
-  launchctl bootstrap "gui/$(id -u)" "$AGENT"
-  echo "Installed to $DEST and set to start at login."
+  if [[ -f "$AGENT" ]]; then
+    launchctl bootout "gui/$(id -u)" "$AGENT" 2>/dev/null || true
+    rm -f "$AGENT"
+    echo "Removed the old LaunchAgent: turn on Open at Login in Settings instead."
+  fi
+  open "$DEST"
+  echo "Installed to $DEST and opened it."
 fi

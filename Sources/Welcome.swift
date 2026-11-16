@@ -193,7 +193,7 @@ struct WelcomeView: View {
 
             row(1, "Connect to Claude Code") {
                 Text("The app reads your Claude Code login from the Keychain, so macOS will ask whether “security” may use “Claude Code-credentials”.")
-                Text("**Always Allow** stops macOS asking again, but it also lets other software on this Mac read that login through the same system tool. **Allow** asks again each time the app re-reads the login (at launch and every few hours).")
+                Text("**Always Allow** stops macOS asking again, but it also lets other software on this Mac read that login through the same system tool. **Allow** asks again each time the app re-reads the login (at launch, and when Claude Code renews its login).")
             } control: { connectControl }
 
             row(2, "Notifications") {

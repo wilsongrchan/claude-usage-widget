@@ -286,6 +286,13 @@ extension Color {
 
 enum Palette {
     static let claude = Color(hex: 0xD97757)   // Claude orange
+    /// Claude orange for text and selected items in Settings: darker in light mode and lighter
+    /// in dark mode, so it stays readable on the glass and on the light-orange highlight.
+    static let claudeText = Color(nsColor: NSColor(name: "claudeText") { a in
+        a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(srgbRed: 0xF2 / 255, green: 0xA0 / 255, blue: 0x7E / 255, alpha: 1)
+            : NSColor(srgbRed: 0x9E / 255, green: 0x44 / 255, blue: 0x19 / 255, alpha: 1)
+    })
     static let peach  = Color(hex: 0xEBA683)   // light terracotta
     static let ember  = Color(hex: 0xB9531C)   // dark orange
     /// Dark red, nearing the limit. On dark backgrounds #9B1C1C is hard to read, so dark mode

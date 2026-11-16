@@ -167,7 +167,7 @@ struct SegmentedChoice<Value: Hashable>: View {
                             .font(.system(size: 11, weight: selected ? .semibold : .regular))
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
-                            .foregroundStyle(selected ? Palette.claude : Color.primary.opacity(0.75))
+                            .foregroundStyle(selected ? Palette.claudeText : Color.primary.opacity(0.75))
                             .frame(maxWidth: .infinity)
                             .frame(height: 20)
                             .background(RoundedRectangle(cornerRadius: 5, style: .continuous)
@@ -244,7 +244,7 @@ struct SettingsPanel: View {
                                     .lineLimit(1)
                                     .fixedSize()
                             }
-                            .foregroundStyle(selected ? Palette.claude : Color.secondary)
+                            .foregroundStyle(selected ? Palette.claudeText : Color.secondary)
                             .frame(width: 58)   // equal-width tabs (five fit the large widget)
                             .padding(.vertical, 4)
                             .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
@@ -300,7 +300,7 @@ struct RingsPanel: View {
                         .padding(.leading, 7)
                     VStack(alignment: .leading, spacing: 6) {
                         LabeledPicker(title: "Weekly ring slices", selection: $weeklySplit,
-                                      options: [("7 days", 0), ("Weekdays", 1), ("Custom", 2), ("Rest evenly", 3)])
+                                      options: [("7 days", 0), ("Weekdays", 1), ("Custom", 2), ("Split remaining", 3)])
                         Text(weeklySplit == 0 ? "Even split: about 14% per day."
                              : weeklySplit == 1 ? "5 slices, 20% per weekday; weekends get no budget."
                              : weeklySplit == 2 ? "Set each day's share. Slices and pace follow it."
@@ -371,7 +371,7 @@ struct RingsPanel: View {
                 Button("Reset") { custom = WeekBudget.defaultCustom; save() }
                     .buttonStyle(.plain)
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Palette.claude)
+                    .foregroundStyle(Palette.claudeText)
             }
         }
         .padding(8)
@@ -528,7 +528,7 @@ struct AlertsPanel: View {
                             Button("Turn On…") { NSWorkspace.shared.open(NotificationAccess.settingsURL) }
                                 .buttonStyle(.plain)
                                 .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(Palette.claude)
+                                .foregroundStyle(Palette.claudeText)
                         }
                         .font(.system(size: 11))
                     }
@@ -606,7 +606,7 @@ struct ThresholdEditor: View {
                             .accessibilityLabel("Remove \(t)% alert")
                         }
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Palette.claude)
+                        .foregroundStyle(Palette.claudeText)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
                         .background(Capsule().fill(Palette.claude.opacity(0.15)))
@@ -718,7 +718,7 @@ struct ReminderEditor: View {
                             .accessibilityLabel("Remove the \(ResetReminder.leadText(l, long: true)) reminder")
                         }
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Palette.claude)
+                        .foregroundStyle(Palette.claudeText)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
                         .background(Capsule().fill(Palette.claude.opacity(0.15)))
@@ -750,7 +750,7 @@ struct ReminderEditor: View {
                         Button { inDays.toggle(); value = min(value, inDays ? 30 : 72) } label: {
                             Text(inDays ? "days" : "hours")
                                 .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(Palette.claude)
+                                .foregroundStyle(Palette.claudeText)
                                 .underline()
                         }
                         .buttonStyle(.plain)
@@ -1039,7 +1039,7 @@ struct AboutPanel: View {
         VStack(alignment: .leading, spacing: 3) {
             Label(title, systemImage: icon)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Palette.claude)
+                .foregroundStyle(Palette.claudeText)
             Text(text)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
@@ -1086,7 +1086,7 @@ struct IconChoice<Value: Hashable>: View {
                 let selected = selection == o.0
                 Button { withAnimation(.easeOut(duration: 0.15)) { selection = o.0 } } label: {
                     o.2
-                        .foregroundStyle(selected ? Palette.claude : Color.primary.opacity(0.62))
+                        .foregroundStyle(selected ? Palette.claudeText : Color.primary.opacity(0.62))
                         .frame(width: 38, height: 30)
                         .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
                             .fill(selected ? Palette.claude.opacity(0.18) : Color.clear))

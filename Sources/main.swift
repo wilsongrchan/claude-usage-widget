@@ -309,14 +309,19 @@ func usageColor(_ pct: Double) -> Color {
 
 // MARK: - Formatting helpers
 
+/// Reset times as chosen in Settings → Rings: time left or clock time.
+var resetsAsClock: Bool { UserDefaults.standard.integer(forKey: ResetTimes.key) == 1 }
+
+/// "resets in 3h 13m" or "resets at 4:10 PM" / "resets Mon 9 AM".
 func resetText(_ date: Date?, now: Date) -> String {
     guard let date else { return "—" }
-    let s = Int(date.timeIntervalSince(now))
-    if s <= 0 { return "resetting…" }
-    let d = s / 86400, h = (s % 86400) / 3600, m = (s % 3600) / 60
-    if d > 0 { return "resets in \(d)d \(h)h" }
-    if h > 0 { return "resets in \(h)h \(m)m" }
-    return "resets in \(max(m, 1))m"
+    return ResetTimes.phrase(date, now: now, clock: resetsAsClock, h24: uses24Hour)
+}
+
+/// "↻ 2d 19h" or "↻ Mon 9 AM", for the model limit bar.
+func barResetText(_ date: Date?, now: Date) -> String {
+    guard let date else { return "↻ —" }
+    return "↻ " + ResetTimes.bare(date, now: now, clock: resetsAsClock, h24: uses24Hour)
 }
 
 /// The 5-hour session has no reset time until the first message starts it.
@@ -960,6 +965,7 @@ struct WidgetView: View {
     @AppStorage("showScoped") var showScoped = true
     @AppStorage("showPaceNote") var showPaceNote = true
     @AppStorage("showForecast") var showForecast = true
+    @AppStorage(ResetTimes.key) var resetTimeStyle = 0   // read through resetText; here so a change redraws
     /// Used by the menu bar popover, which always shows the large layout.
     var forceLarge = false
     @ObservedObject private var state = WidgetState.shared
@@ -1140,8 +1146,7 @@ struct WidgetView: View {
                 ForEach(Array(scoped.enumerated()), id: \.offset) { _, l in
                     BarRow(label: "\(l.scope?.model?.display_name ?? "Model") weekly",
                            percent: l.percent ?? 0,
-                           reset: resetText(parseDate(l.resets_at), now: store.now)
-                               .replacingOccurrences(of: "resets in ", with: "↻ "))
+                           reset: barResetText(parseDate(l.resets_at), now: store.now))
                         .help("\(l.scope?.model?.display_name ?? "Model") has its own weekly limit, \(resetText(parseDate(l.resets_at), now: store.now)).")
                 }
             }
@@ -1372,8 +1377,7 @@ struct WidgetView: View {
         if let l = scoped.first {
             BarRow(label: "\(l.scope?.model?.display_name ?? "Model") weekly",
                    percent: l.percent ?? 0,
-                   reset: resetText(parseDate(l.resets_at), now: store.now)
-                       .replacingOccurrences(of: "resets in ", with: "↻ "))
+                   reset: barResetText(parseDate(l.resets_at), now: store.now))
                 .padding(.horizontal, 2)
         }
     }
@@ -1481,7 +1485,8 @@ struct WidgetView: View {
     }
 
     func compactReset(_ d: Date?) -> String {
-        resetText(d, now: store.now).replacingOccurrences(of: "resets in ", with: "in ")
+        guard let d else { return "—" }
+        return ResetTimes.short(d, now: store.now, clock: resetsAsClock, h24: uses24Hour)
     }
 
     func errorLabel(_ err: String) -> some View {

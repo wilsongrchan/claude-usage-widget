@@ -152,3 +152,26 @@ func testSnapping() {
         expectEqual(covered?.y, 640, "never on top of a native widget")
     }
 }
+
+func testResetTimes() {
+    let now = date(2026, 11, 16, 12, 57)   // Monday 12:57 UTC
+    suite("Reset times: time left or clock time") {
+        expectEqual(ResetTimes.countdown(3 * 3600 + 13 * 60), "3h 13m")
+        expectEqual(ResetTimes.countdown(2 * 86400 + 19 * 3600 + 5), "2d 19h")
+        expectEqual(ResetTimes.countdown(20), "1m")
+        let later = date(2026, 11, 16, 16, 10), monday = date(2026, 11, 23, 9), half = date(2026, 11, 17, 1, 42)
+        expectEqual(ResetTimes.phrase(later, now: now, clock: false, h24: false, calendar: utc), "resets in 3h 13m")
+        expectEqual(ResetTimes.phrase(later, now: now, clock: true, h24: false, calendar: utc), "resets at 4:10 PM")
+        expectEqual(ResetTimes.phrase(later, now: now, clock: true, h24: true, calendar: utc), "resets at 16:10")
+        expectEqual(ResetTimes.phrase(monday, now: now, clock: true, h24: false, calendar: utc), "resets Mon 9 AM")
+        expectEqual(ResetTimes.phrase(monday, now: now, clock: true, h24: true, calendar: utc), "resets Mon 9:00")
+        expectEqual(ResetTimes.phrase(half, now: now, clock: true, h24: false, calendar: utc), "resets Tue 1:42 AM",
+                    "another day, not on the hour: keep the minutes")
+        expectEqual(ResetTimes.short(later, now: now, clock: true, h24: false, calendar: utc), "at 4:10 PM")
+        expectEqual(ResetTimes.short(later, now: now, clock: false, h24: false, calendar: utc), "in 3h 13m")
+        expectEqual(ResetTimes.short(monday, now: now, clock: true, h24: false, calendar: utc), "Mon 9 AM")
+        expectEqual(ResetTimes.bare(monday, now: now, clock: true, h24: false, calendar: utc), "Mon 9 AM")
+        expectEqual(ResetTimes.bare(monday, now: now, clock: false, h24: false, calendar: utc), "6d 20h")
+        expectEqual(ResetTimes.phrase(now.addingTimeInterval(-5), now: now, clock: true, h24: false, calendar: utc), "resetting…")
+    }
+}

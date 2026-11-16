@@ -32,6 +32,57 @@ enum ForecastMath {
     }
 }
 
+// MARK: - Reset times
+
+/// How reset times read: as time left ("in 3h 13m") or as a clock time ("at 4:10 PM").
+enum ResetTimes {
+    static let key = "resetTimeStyle"   // 0 = time left, 1 = clock time
+
+    /// "3h 13m", "2d 19h", "5m"
+    static func countdown(_ seconds: Int) -> String {
+        let d = seconds / 86400, h = (seconds % 86400) / 3600, m = (seconds % 3600) / 60
+        if d > 0 { return "\(d)d \(h)h" }
+        if h > 0 { return "\(h)h \(m)m" }
+        return "\(max(m, 1))m"
+    }
+
+    /// Today: "4:10 PM" (24-hour: "16:10"). Another day: "Mon 9 AM", "Mon 9:30 AM" ("Mon 9:00").
+    static func clock(_ d: Date, now: Date, h24: Bool, calendar: Calendar = .current) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = calendar.timeZone
+        let onHour = calendar.component(.minute, from: d) == 0
+        if calendar.isDate(d, inSameDayAs: now) {
+            f.dateFormat = h24 ? "H:mm" : "h:mm a"
+        } else {
+            f.dateFormat = h24 ? "EEE H:mm" : (onHour ? "EEE h a" : "EEE h:mm a")
+        }
+        return f.string(from: d)
+    }
+
+    /// "resets in 3h 13m", "resets at 4:10 PM", "resets Mon 9 AM", or "resetting…".
+    static func phrase(_ d: Date, now: Date, clock useClock: Bool, h24: Bool, calendar: Calendar = .current) -> String {
+        let s = Int(d.timeIntervalSince(now))
+        if s <= 0 { return "resetting…" }
+        guard useClock else { return "resets in \(countdown(s))" }
+        let c = clock(d, now: now, h24: h24, calendar: calendar)
+        return calendar.isDate(d, inSameDayAs: now) ? "resets at \(c)" : "resets \(c)"
+    }
+
+    /// For tight spots: "in 3h 13m", "at 4:10 PM", "Mon 9 AM".
+    static func short(_ d: Date, now: Date, clock useClock: Bool, h24: Bool, calendar: Calendar = .current) -> String {
+        let p = phrase(d, now: now, clock: useClock, h24: h24, calendar: calendar)
+        return p.hasPrefix("resets ") ? String(p.dropFirst("resets ".count)) : p
+    }
+
+    /// After a ↻ icon: "2d 19h", "4:10 PM", "Mon 9 AM".
+    static func bare(_ d: Date, now: Date, clock useClock: Bool, h24: Bool, calendar: Calendar = .current) -> String {
+        let s = Int(d.timeIntervalSince(now))
+        if s <= 0 { return "resetting…" }
+        return useClock ? clock(d, now: now, h24: h24, calendar: calendar) : countdown(s)
+    }
+}
+
 // MARK: - Versions
 
 /// "0.2.0" > "0.1.10" > "0.1.9"; a leading "v" is ignored and missing parts count as 0.

@@ -146,7 +146,19 @@ struct LabeledPicker<Value: Hashable>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-            // Custom segmented control: the system one always highlights in blue.
+            SegmentedChoice(title: title, selection: $selection, options: options)
+        }
+    }
+}
+
+/// Custom segmented control: the system one always highlights in blue.
+struct SegmentedChoice<Value: Hashable>: View {
+    let title: String
+    @Binding var selection: Value
+    let options: [(String, Value)]
+
+    var body: some View {
+        Group {
             HStack(spacing: 2) {
                 ForEach(Array(options.enumerated()), id: \.offset) { _, o in
                     let selected = selection == o.1
@@ -292,7 +304,7 @@ struct RingsPanel: View {
                         Text(weeklySplit == 0 ? "Even split: about 14% per day."
                              : weeklySplit == 1 ? "5 slices, 20% per weekday; weekends get no budget."
                              : weeklySplit == 2 ? "Set each day's share. Slices and pace follow it."
-                             : "What's left is shared evenly by today and the days still to come. Days already gone become one slice of what they used.")
+                             : "Splits what's left evenly over the remaining days.")
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -305,9 +317,19 @@ struct RingsPanel: View {
                 SectionLabel(text: "Notes")
                 SettingToggle(title: "Pace note", isOn: $showPaceNote) { Image(systemName: "checkmark.circle") }
                 SettingToggle(title: "Run-out estimate", isOn: $showForecast) { Image(systemName: "hourglass") }
-                // The options are their own examples: time left, or the clock time it resets.
-                LabeledPicker(title: "Reset times", selection: $resetTimeStyle,
-                              options: [("In 3h 13m", 0), (uses24Hour ? "At 16:10" : "At 4:10 PM", 1)])
+                // A row like the switches above; the options are their own examples.
+                HStack(spacing: 8) {
+                    Image(systemName: "clock")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Palette.claude)
+                        .frame(width: 16)
+                        .accessibilityHidden(true)
+                    Text("Reset times").font(.system(size: 12)).lineLimit(1)
+                    Spacer(minLength: 4)
+                    SegmentedChoice(title: "Reset times", selection: $resetTimeStyle,
+                                    options: [("In 3h 13m", 0), (uses24Hour ? "At 16:10" : "At 4:10 PM", 1)])
+                        .frame(width: 170)
+                }
             }
             .padding(.bottom, 2)
         }

@@ -61,7 +61,7 @@ USING IT
   see its name.
 - Settings opens at large size (a small or medium widget grows, then goes
   back when you close it or click elsewhere). Tabs: Rings (pace marker,
-  segmented rings, weekly split including "Split remaining", notes, reset times), Widget
+  segmented rings, weekly split including "Split", notes, reset times), Widget
   (theme, color style, size, resize direction, Open at Login), Alerts,
   Data (today's usage by hour) and About.
 - The small orange ring in your menu bar shows session usage at a glance.

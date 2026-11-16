@@ -236,9 +236,23 @@ struct SettingsPanel: View {
                         let selected = tab == i
                         Button { withAnimation(.easeOut(duration: 0.15)) { tab = i } } label: {
                             VStack(spacing: 2) {
-                                Image(systemName: Self.tabs[i].icon)
-                                    .font(.system(size: 15, weight: .regular))
-                                    .frame(height: 18)
+                                Group {
+                                    if i == 0 {
+                                        // Rings: the app's own 5-slice ring, like the segmented gauges.
+                                        ZStack {   // thin strokes, to match the other tab icons
+                                            ForEach(0..<5, id: \.self) { k in
+                                                Circle()
+                                                    .trim(from: Double(k) / 5 + 0.03, to: Double(k + 1) / 5 - 0.03)
+                                                    .stroke(style: StrokeStyle(lineWidth: 1.6, lineCap: .butt))
+                                            }
+                                        }
+                                        .rotationEffect(.degrees(-90))
+                                        .frame(width: 16, height: 16)
+                                    } else {
+                                        Image(systemName: Self.tabs[i].icon).font(.system(size: 15, weight: .regular))
+                                    }
+                                }
+                                .frame(height: 18)
                                 Text(Self.tabs[i].short)
                                     .font(.system(size: 10, weight: selected ? .semibold : .regular))
                                     .lineLimit(1)
@@ -300,7 +314,7 @@ struct RingsPanel: View {
                         .padding(.leading, 7)
                     VStack(alignment: .leading, spacing: 6) {
                         LabeledPicker(title: "Weekly ring slices", selection: $weeklySplit,
-                                      options: [("7 days", 0), ("Weekdays", 1), ("Custom", 2), ("Split remaining", 3)])
+                                      options: [("7 days", 0), ("Weekdays", 1), ("Custom", 2), ("Split", 3)])
                         Text(weeklySplit == 0 ? "Even split: about 14% per day."
                              : weeklySplit == 1 ? "5 slices, 20% per weekday; weekends get no budget."
                              : weeklySplit == 2 ? "Set each day's share. Slices and pace follow it."

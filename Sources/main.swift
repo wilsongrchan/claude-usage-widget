@@ -288,7 +288,13 @@ enum Palette {
     static let claude = Color(hex: 0xD97757)   // Claude orange
     static let peach  = Color(hex: 0xEBA683)   // light terracotta
     static let ember  = Color(hex: 0xB9531C)   // dark orange
-    static let rust   = Color(hex: 0x9B1C1C)   // dark red — nearing the limit
+    /// Dark red, nearing the limit. On dark backgrounds #9B1C1C is hard to read, so dark mode
+    /// uses a lighter red.
+    static let rust = Color(nsColor: NSColor(name: "rust") { a in
+        a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(srgbRed: 0xC9 / 255, green: 0x31 / 255, blue: 0x2C / 255, alpha: 1)   // owner's pick: red, not orange
+            : NSColor(srgbRed: 0x9B / 255, green: 0x1C / 255, blue: 0x1C / 255, alpha: 1)
+    })
     static let cream  = Color(hex: 0xF4F3EE)
 }
 

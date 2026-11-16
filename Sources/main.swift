@@ -1626,78 +1626,34 @@ enum Grid {
         return NSRect(x: v.maxX - margin - o.width, y: v.maxY - margin - o.height, width: o.width, height: o.height)
     }
 
-    /// Notification Center keeps its prefs inside its own container, out of reach of
-    /// `UserDefaults(suiteName:)`, so ask the system `defaults` tool (via cfprefsd) instead.
-    static func placementData() -> Data? {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/defaults")
-        p.arguments = ["export", "com.apple.notificationcenterui", "-"]
-        let out = Pipe()
-        p.standardOutput = out
-        p.standardError = FileHandle.nullDevice
-        guard (try? p.run()) != nil else { return nil }
-        let raw = out.fileHandleForReading.readDataToEndOfFile()
-        p.waitUntilExit()
-        guard let prefs = try? PropertyListSerialization.propertyList(from: raw, format: nil) as? [String: Any],
-              let widgets = prefs["widgets"] as? [String: Any] else { return nil }
-        return widgets["DesktopWidgetPlacementStorage"] as? Data
+    /// Native desktop widgets' cells, in screen (AppKit) coordinates. Each native widget is a
+    /// window owned by Notification Center at a desktop level, framed exactly on its grid cells
+    /// (180pt per cell), so the public window list says where they all are. Unlike Notification
+    /// Center's own settings (kept in a protected app container: reading them can stall on the
+    /// "access data from other apps" prompt), window positions need no permission and are instant.
+    static func nativeWidgetRects() -> [NSRect] {
+        guard let nc = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.notificationcenterui")
+                .first?.processIdentifier,
+              let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]],
+              let primary = NSScreen.screens.first?.frame else { return [] }
+        let isCells = { (v: CGFloat) in
+            let n = (v / pitch).rounded()
+            return n >= 1 && n <= 4 && abs(v - n * pitch) < 1
+        }
+        return list.compactMap { w -> NSRect? in
+            guard (w[kCGWindowOwnerPID as String] as? Int32) == nc,
+                  let layer = w[kCGWindowLayer as String] as? Int, layer < 0,   // desktop levels only
+                  let b = w[kCGWindowBounds as String] as? [String: CGFloat],
+                  let x = b["X"], let y = b["Y"], let width = b["Width"], let height = b["Height"],
+                  isCells(width), isCells(height) else { return nil }
+            // The window list measures from the top-left of the main screen, AppKit from its bottom-left.
+            return NSRect(x: x, y: primary.maxY - y - height, width: width, height: height)
+        }
     }
 
-    /// Last placement read by `refreshPlacement` (main thread only). Reading it means running
-    /// `defaults`, so snapping uses this copy and never waits for the process.
-    nonisolated(unsafe) static var placementCache: Data?
-    nonisolated(unsafe) private static var placementLoading = false
-
-    /// Re-read the native widgets' placement in the background, then call `done` on the main thread.
+    /// Kept so callers can ask for a fresh look: the window list is read live, so this just runs `done`.
     static func refreshPlacement(then done: @escaping () -> Void = {}) {
-        guard !placementLoading else { return }
-        placementLoading = true
-        DispatchQueue.global(qos: .utility).async {
-            let data = placementData()
-            DispatchQueue.main.async {
-                placementCache = data
-                placementLoading = false
-                done()
-            }
-        }
-    }
-
-    /// Native widget groups on this display: each group's top-left (points from the visible
-    /// frame's top-left) and the screen rects of its widgets' cells.
-    static func nativeLayout(in v: NSRect) -> (origins: [CGPoint], rects: [NSRect]) {
-        guard let data = placementCache,
-              let root = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
-              let displays = root["NumberedDisplays"] as? [[String: Any]] else { return ([], []) }
-        // Use the entry saved for this visible size; failing that, the closest one.
-        var best: ([String: Any], Double)?
-        for display in displays {
-            for res in (display["Resolutions"] as? [[String: Any]]) ?? [] {
-                guard let size = res["Size"] as? [Double], size.count == 2 else { continue }
-                let d = abs(size[0] - v.width) + abs(size[1] - v.height)
-                if best == nil || d < best!.1 { best = (res, d) }
-            }
-        }
-        guard let res = best?.0 else { return ([], []) }
-        var origins: [CGPoint] = [], rects: [NSRect] = []
-        for group in (res["Groups"] as? [[String: Any]]) ?? [] {
-            let o = (group["Origin"] as? [Double]) ?? [Double(margin), Double(margin)]
-            guard o.count == 2 else { continue }
-            origins.append(CGPoint(x: o[0], y: o[1]))
-            for item in (group["Items"] as? [[String: Any]]) ?? [] {
-                guard let col = item["Column"] as? Int, let row = item["Row"] as? Int else { continue }
-                let sizeKey = (item["Size"] as? [String: Any])?.keys.first ?? "Small"
-                let (w, h): (Int, Int) = switch sizeKey {
-                    case "Medium": (2, 1)
-                    case "Large": (2, 2)
-                    case "ExtraLarge": (4, 2)
-                    default: (1, 1)
-                }
-                let x = v.minX + o[0] + Double(col) * pitch
-                let top = v.maxY - o[1] - Double(row) * pitch
-                rects.append(NSRect(x: x, y: top - Double(h) * pitch, width: Double(w) * pitch, height: Double(h) * pitch))
-            }
-        }
-        return (origins, rects)
+        DispatchQueue.main.async { done() }
     }
 
     private static func lattice(_ ref: CGFloat, len: CGFloat, lo: CGFloat, hi: CGFloat) -> [CGFloat] {
@@ -1710,33 +1666,26 @@ enum Grid {
     static func snappedFrame(near frame: NSRect, size s: WidgetSize, on screen: NSScreen) -> NSRect {
         let v = screen.visibleFrame
         let o = outer(s)
-        let (origins, taken) = nativeLayout(in: v)
+        let taken = nativeWidgetRects().filter { $0.intersects(v) }
         let lo = (x: v.minX + margin, y: v.minY + margin), hi = (x: v.maxX - margin, y: v.maxY - margin)
 
-        // Reference left edges and top edges (AppKit y, so a top edge is a maxY).
-        var xRefs: [CGFloat] = [lo.x, hi.x - o.width]
-        var topRefs: [CGFloat] = [hi.y, lo.y + o.height]
-        for g in origins { xRefs.append(v.minX + g.x); topRefs.append(v.maxY - g.y) }
-
-        var xs = Set<CGFloat>(), ys = Set<CGFloat>()
-        for r in xRefs { xs.formUnion(lattice(r, len: o.width, lo: lo.x, hi: hi.x)) }
-        for r in topRefs { ys.formUnion(lattice(r - o.height, len: o.height, lo: lo.y, hi: hi.y)) }
-
-        var best: (NSRect, CGFloat, Bool)?
-        for x in xs {
-            for y in ys {
-                let f = NSRect(x: x.rounded(), y: y.rounded(), width: o.width, height: o.height)
-                let free = !taken.contains { $0.intersects(f.insetBy(dx: 1, dy: 1)) }
-                let d = hypot(f.minX - frame.minX, f.minY - frame.minY)
-                if let b = best {
-                    // Prefer free slots; among equals, prefer nearest.
-                    if (free && !b.2) || (free == b.2 && d < b.1) { best = (f, d, free) }
-                } else {
-                    best = (f, d, free)
-                }
-            }
+        // Reference left edges and top edges (AppKit y, so a top edge is a maxY): the screen's
+        // edges, and the grid each native widget sits on.
+        let edgeX: [CGFloat] = [lo.x, hi.x - o.width], edgeTop: [CGFloat] = [hi.y, lo.y + o.height]
+        let groupX = taken.map { $0.minX }, groupTop = taken.map { $0.maxY }   // every native widget's own grid
+        func xsFrom(_ refs: [CGFloat]) -> Set<Double> {
+            Set(refs.flatMap { gridLattice(Double($0), len: Double(o.width), lo: Double(lo.x), hi: Double(hi.x), pitch: Double(pitch)) }.map { $0.rounded() })
         }
-        return best?.0 ?? frame
+        func ysFrom(_ tops: [CGFloat]) -> Set<Double> {
+            Set(tops.flatMap { gridLattice(Double($0 - o.height), len: Double(o.height), lo: Double(lo.y), hi: Double(hi.y), pitch: Double(pitch)) }.map { $0.rounded() })
+        }
+        let alignedXs = xsFrom(groupX), alignedYs = ysFrom(groupTop)
+        let xs = xsFrom(edgeX).union(alignedXs), ys = ysFrom(edgeTop).union(alignedYs)
+        let slot = bestSlot(near: (Double(frame.minX), Double(frame.minY)), xs: Array(xs), ys: Array(ys),
+                            w: Double(o.width), h: Double(o.height),
+                            taken: taken.map { Slot(x: $0.minX, y: $0.minY, w: $0.width, h: $0.height) },
+                            alignedXs: alignedXs, alignedYs: alignedYs, pitch: Double(pitch))
+        return slot.map { NSRect(x: $0.x, y: $0.y, width: $0.w, height: $0.h) } ?? frame
     }
 }
 
@@ -2063,9 +2012,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             if self?.finderFrontmost == true { Grid.refreshPlacement { self?.resnapIfCovered() } }
         }
 
-        // A native widget can be dropped onto ours: while on the desktop, check once a minute.
-        // (Elsewhere, nothing can move them, so don't spend a `defaults` process on it.)
-        Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+        // A native widget can be dropped onto ours: while on the desktop, look every 10 seconds
+        // (a cheap window-list read). Elsewhere nothing can move them, so don't look.
+        Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
             guard let self, self.finderFrontmost, self.window.isVisible else { return }
             Grid.refreshPlacement { self.resnapIfCovered() }
         }

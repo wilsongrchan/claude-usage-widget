@@ -58,6 +58,39 @@ func gridLattice(_ ref: Double, len: Double, lo: Double, hi: Double, pitch: Doub
     return stride(from: first, through: hi - len + 0.5, by: pitch).map { $0 }
 }
 
+/// A widget slot on screen (AppKit coordinates: origin bottom-left), in points.
+struct Slot: Equatable {
+    var x, y, w, h: Double
+    func intersects(_ o: Slot, inset: Double = 0) -> Bool {
+        x + inset < o.x + o.w && o.x < x + w - inset && y + inset < o.y + o.h && o.y < y + h - inset
+    }
+    func expanded(by d: Double) -> Slot { Slot(x: x - d, y: y - d, w: w + 2 * d, h: h + 2 * d) }
+}
+
+/// Picks where a widget snaps. Free slots beat taken ones. Next to native widgets, a slot on
+/// their grid (`alignedXs` × `alignedYs`) wins over a slightly nearer one on the screen-edge
+/// grid: the two can be a few points apart, and sitting a few points off a native widget looks
+/// wrong. Elsewhere the nearest slot wins.
+func bestSlot(near p: (x: Double, y: Double), xs: [Double], ys: [Double], w: Double, h: Double,
+              taken: [Slot], alignedXs: Set<Double>, alignedYs: Set<Double>, pitch: Double) -> Slot? {
+    var best: (slot: Slot, free: Bool, score: Double)?
+    for x in xs {
+        for y in ys {
+            let s = Slot(x: x.rounded(), y: y.rounded(), w: w, h: h)
+            let free = !taken.contains { $0.intersects(s, inset: 1) }
+            let aligned = alignedXs.contains(s.x) && alignedYs.contains(s.y)
+            let nearNative = taken.contains { $0.intersects(s.expanded(by: 40)) }
+            let score = hypot(s.x - p.x, s.y - p.y) - (aligned && nearNative ? pitch / 2 : 0)
+            if let b = best {
+                if (free && !b.free) || (free == b.free && score < b.score) { best = (s, free, score) }
+            } else {
+                best = (s, free, score)
+            }
+        }
+    }
+    return best?.slot
+}
+
 // MARK: - Notifications already sent
 
 /// Which alerts and reminders have already gone out, so each fires once. One dictionary

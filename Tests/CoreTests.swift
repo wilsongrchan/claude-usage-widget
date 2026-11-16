@@ -130,3 +130,25 @@ func testRestEvenly() {
         }
     }
 }
+
+func testSnapping() {
+    suite("bestSlot lines up with native widgets next to them") {
+        // A native column 8pt off the screen-edge grid (as on the owner's second Mac).
+        let native = [Slot(x: 8, y: 820, w: 360, h: 180)]
+        let edge = [16.0, 196], nativeX: Set<Double> = [8, 188]
+        let ys = [460.0, 640, 1000], nativeY: Set<Double> = [460, 640]
+        // Our large widget sits just below it, on the edge grid at x 16.
+        let s = bestSlot(near: (16, 460), xs: edge + Array(nativeX), ys: ys, w: 360, h: 360,
+                         taken: native, alignedXs: nativeX, alignedYs: nativeY, pitch: 180)
+        expectEqual(s?.x, 8, "moves 8pt to line up with the native column")
+        expectEqual(s?.y, 460)
+        // Far from any native widget, the nearest slot still wins.
+        let far = bestSlot(near: (1000, 100), xs: [1000, 1008], ys: [100], w: 180, h: 180,
+                           taken: native, alignedXs: [1008], alignedYs: [100], pitch: 180)
+        expectEqual(far?.x, 1000, "no pull towards the native grid away from native widgets")
+        // A free slot always beats one a native widget covers.
+        let covered = bestSlot(near: (8, 820), xs: [8], ys: [820, 640], w: 360, h: 180,
+                               taken: native, alignedXs: [8], alignedYs: [820, 640], pitch: 180)
+        expectEqual(covered?.y, 640, "never on top of a native widget")
+    }
+}

@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Builds "Claude Usage.app" (executable ClaudeUsage). Usage:
 #   ./build.sh            build into ./build
-#   ./build.sh install    build, copy to ~/Applications and launch (turn on Open at Login in Settings)
+#   ./build.sh install    build, replace the copy in /Applications (or ~/Applications) and launch it
 #   ./build.sh dist       universal (Apple Silicon + Intel) build, zipped with the install
 #                         guide into dist/ClaudeUsage.zip for sharing
 #   ./build.sh test       compile Sources/Core + Tests into a command-line runner and run it
@@ -32,6 +32,8 @@ fi
 
 APP="build/Claude Usage.app"
 rm -rf "$APP" build/ClaudeUsage.app   # also the old file name
+# Keep this working copy out of Spotlight and Launchpad, so only the installed app shows up.
+mkdir -p build && touch build/.metadata_never_index
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 [[ -f Resources/AppIcon.icns ]] || swift tools/make_icon.swift
 cp Resources/AppIcon.icns "$APP/Contents/Resources/"
@@ -80,11 +82,13 @@ if [[ "${1:-}" == "dist" ]]; then
 fi
 
 if [[ "${1:-}" == "install" ]]; then
-  DEST="$HOME/Applications/Claude Usage.app"
+  # Same place install.sh uses, so there's only ever one installed copy.
+  if [[ -w /Applications ]]; then DIR=/Applications; else DIR="$HOME/Applications"; mkdir -p "$DIR"; fi
+  DEST="$DIR/Claude Usage.app"
   pkill -x ClaudeUsage 2>/dev/null || true
-  mkdir -p "$HOME/Applications"
-  rm -rf "$HOME/Applications/ClaudeUsage.app"   # the old file name
-  rm -rf "$DEST" && cp -R "$APP" "$DEST"
+  for _ in {1..20}; do pgrep -x ClaudeUsage >/dev/null || break; sleep 0.25; done
+  rm -rf "$DEST" "$DIR/ClaudeUsage.app"   # and the old file name
+  ditto "$APP" "$DEST"
 
   # Older versions started the app with this LaunchAgent. The app's Open at Login switch
   # (SMAppService) replaces it; keeping both would start it twice.

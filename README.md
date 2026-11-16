@@ -109,7 +109,7 @@ Requires the Xcode Command Line Tools (`xcode-select --install`).
 
 ```sh
 ./build.sh            # build into ./build
-./build.sh install    # build, install to ~/Applications and open it
+./build.sh install    # build, install to Applications and open it
 ./build.sh dist       # universal build + zip in ./dist
 ./build.sh test       # run the tests
 ```

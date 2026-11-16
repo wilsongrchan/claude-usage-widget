@@ -6,7 +6,8 @@
 set -euo pipefail
 
 URL="https://github.com/wilsongrchan/claude-usage-widget/releases/latest/download/ClaudeUsage.zip"
-APP_NAME="ClaudeUsage.app"
+APP_NAME="Claude Usage.app"
+OLD_NAME="ClaudeUsage.app"   # versions up to 0.2.0 used this file name
 
 say() { printf '%s\n' "$*"; }
 fail() { printf 'Error: %s\n' "$*" >&2; exit 1; }
@@ -38,7 +39,7 @@ if pgrep -x ClaudeUsage >/dev/null; then
   for _ in {1..20}; do pgrep -x ClaudeUsage >/dev/null || break; sleep 0.25; done
 fi
 
-rm -rf "$dest"
+rm -rf "$dest" "$dest_dir/$OLD_NAME"
 ditto "$src" "$dest"
 say "Installed to $dest"
 

@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Builds ClaudeUsage.app. Usage:
+# Builds "Claude Usage.app" (executable ClaudeUsage). Usage:
 #   ./build.sh            build into ./build
 #   ./build.sh install    build, copy to ~/Applications and launch (turn on Open at Login in Settings)
 #   ./build.sh dist       universal (Apple Silicon + Intel) build, zipped with the install
@@ -30,8 +30,8 @@ if [[ ! "$VERSION" =~ '^[0-9]+(\.[0-9]+){0,2}$' ]]; then
   exit 1
 fi
 
-APP=build/ClaudeUsage.app
-rm -rf "$APP"
+APP="build/Claude Usage.app"
+rm -rf "$APP" build/ClaudeUsage.app   # also the old file name
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 [[ -f Resources/AppIcon.icns ]] || swift tools/make_icon.swift
 cp Resources/AppIcon.icns "$APP/Contents/Resources/"
@@ -53,6 +53,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <plist version="1.0"><dict>
   <key>CFBundleIdentifier</key><string>local.claude-usage-widget</string>
   <key>CFBundleName</key><string>Claude Usage</string>
+  <key>CFBundleDisplayName</key><string>Claude Usage</string>
   <key>CFBundleExecutable</key><string>ClaudeUsage</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
@@ -68,7 +69,7 @@ codesign --force --sign - "$APP" >/dev/null
 echo "Built $APP ($VERSION)"
 
 if [[ "${1:-}" == "dist" ]]; then
-  STAGE=build/dist-stage/ClaudeUsage
+  STAGE="build/dist-stage/Claude Usage"
   rm -rf build/dist-stage && mkdir -p "$STAGE" dist
   cp -R "$APP" "$STAGE/"
   cp INSTALL.md "$STAGE/How to Install.txt"
@@ -79,9 +80,10 @@ if [[ "${1:-}" == "dist" ]]; then
 fi
 
 if [[ "${1:-}" == "install" ]]; then
-  DEST="$HOME/Applications/ClaudeUsage.app"
+  DEST="$HOME/Applications/Claude Usage.app"
   pkill -x ClaudeUsage 2>/dev/null || true
   mkdir -p "$HOME/Applications"
+  rm -rf "$HOME/Applications/ClaudeUsage.app"   # the old file name
   rm -rf "$DEST" && cp -R "$APP" "$DEST"
 
   # Older versions started the app with this LaunchAgent. The app's Open at Login switch

@@ -92,6 +92,14 @@ enum ResetTimes {
     }
 }
 
+// MARK: - Weekly ring
+
+/// Some plans (Enterprise, for one) have no weekly limit, so the weekly ring would sit at 0%.
+enum WeeklyRing {
+    static let key = "weeklyRing"   // 0 = show, 1 = hide in the small widget, 2 = hide
+    static func shown(_ style: Int, small: Bool) -> Bool { style == 0 || (style == 1 && !small) }
+}
+
 // MARK: - Versions
 
 /// "0.2.0" > "0.1.10" > "0.1.9"; a leading "v" is ignored and missing parts count as 0.

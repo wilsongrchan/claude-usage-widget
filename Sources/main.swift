@@ -1385,7 +1385,8 @@ struct WidgetView: View {
                         slices: segmentedRings ? uniformSlices(5) : [0, 1], current: nil,
                         forecast: showForecast && aheadOfPace(session, sElapsed)
                             ? Forecast.hitTime(util: session, resetsAt: sReset, duration: 5 * 3600,
-                                               now: store.now, useRecent: true) : nil)
+                                               now: store.now, useRecent: true) : nil,
+                        roomy: !WeeklyRing.shown(weeklyRing, small: false))
                 .help("Each slice is one hour of the 5-hour session. The white tick marks now.")
             if WeeklyRing.shown(weeklyRing, small: false) {
             Spacer(minLength: 6)
@@ -1408,8 +1409,9 @@ struct WidgetView: View {
         }
     }
 
+    /// `roomy`: the block is on its own (weekly ring hidden), so there's room for "resets at 15:10".
     func mediumBlock(title: String, percent: Double, elapsed: Double?, reset: Date?,
-                     slices: [Double], current: Int?, forecast: Date?) -> some View {
+                     slices: [Double], current: Int?, forecast: Date?, roomy: Bool = false) -> some View {
         HStack(spacing: 8) {
             ZStack {
                 RingGauge(percent: percent, elapsed: elapsed, slices: slices, current: current,
@@ -1433,7 +1435,8 @@ struct WidgetView: View {
                     .textCase(.uppercase)
                     .tracking(0.9)
                     .foregroundStyle(.secondary)
-                Text(reset == nil && title == "Session" ? "starts when\nyou use Claude" : compactReset(reset))
+                Text(reset == nil && title == "Session" ? "starts when\nyou use Claude"
+                     : roomy ? resetText(reset, now: store.now) : compactReset(reset))
                     .font(.system(size: 11, weight: .medium))
                     .monospacedDigit()
                     .foregroundStyle(dimmedNow ? AnyShapeStyle(Color.white.opacity(0.85)) : AnyShapeStyle(.secondary))

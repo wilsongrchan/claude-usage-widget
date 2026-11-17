@@ -4,7 +4,7 @@
 import AppKit
 import SwiftUI
 
-enum Panel { case settings, appearance, alerts, data, resets, about }
+enum Panel { case settings, appearance, alerts, data, resets, about, problem }
 
 /// Simple push/pop navigation between panels.
 struct Nav {
@@ -917,6 +917,61 @@ struct DataPanel: View {
 }
 
 // MARK: - Saved resets
+
+/// What went wrong and what to do about it. Opened by tapping the warning on the widget.
+struct ProblemPanel: View {
+    @ObservedObject var store: UsageStore
+    let nav: Nav
+
+    var body: some View {
+        let p = store.problem
+        VStack(alignment: .leading, spacing: 10) {
+            PanelHeader(title: p?.short ?? "All good", onBack: nav.pop)
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 10) {
+                    if p == nil {
+                        Text("Claude Usage is updating normally again.").font(.system(size: 12))
+                    } else if p == .loginExpired {
+                        Text("Claude Usage uses the login Claude Code saves on this Mac. That login lasts a few hours, and Claude Code renews it the next time you use it.")
+                            .font(.system(size: 12))
+                            .fixedSize(horizontal: false, vertical: true)
+                        SectionLabel(text: "To fix it")
+                        step(1, "Open Claude Code and send any message (or run claude in Terminal).")
+                        step(2, "Come back here. The widget picks up the new login on its next update, or press Refresh.")
+                        step(3, "If macOS asks to use your Keychain, click Allow.")
+                    } else if let p {
+                        Text(p.long).font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
+                    }
+                    if p != nil, let age = ageText(store.lastUpdated, now: store.now) {
+                        Text("Until then the rings show your last reading, from \(age).")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    HStack {
+                        Spacer()
+                        PillButton(title: store.loading ? "Refreshing…" : "Refresh", prominent: true,
+                                   disabled: store.loading) {
+                            Task { await store.refresh(userInitiated: true) }
+                        }
+                    }
+                }
+                .padding(.bottom, 2)
+            }
+        }
+    }
+
+    func step(_ n: Int, _ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("\(n)")
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .foregroundStyle(Palette.claudeText)
+                .frame(width: 16, height: 16)
+                .background(Circle().fill(Palette.claude.opacity(0.15)))
+            Text(text).font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
 
 struct ResetPanel: View {
     let now: Date

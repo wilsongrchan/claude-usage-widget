@@ -3,3 +3,5 @@ build/
 dist/
 .DS_Store
 __pycache__/
+# Rendered promo video (./tools/promo/render.sh)
+docs/promo/

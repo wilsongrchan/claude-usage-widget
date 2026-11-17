@@ -181,3 +181,11 @@ func testResetTimes() {
         expectEqual(none.0, "Time left"); expectEqual(none.1, "Clock time")
     }
 }
+
+func testWeeklyRing() {
+    suite("Weekly ring: show, hide in small, hide") {
+        expect(WeeklyRing.shown(0, small: true)); expect(WeeklyRing.shown(0, small: false))
+        expect(!WeeklyRing.shown(1, small: true)); expect(WeeklyRing.shown(1, small: false))
+        expect(!WeeklyRing.shown(2, small: true)); expect(!WeeklyRing.shown(2, small: false))
+    }
+}

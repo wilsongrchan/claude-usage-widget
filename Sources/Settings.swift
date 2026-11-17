@@ -299,12 +299,27 @@ struct RingsPanel: View {
     @AppStorage("showPaceNote") var showPaceNote = true
     @AppStorage("showForecast") var showForecast = true
     @AppStorage(ResetTimes.key) var resetTimeStyle = 0
+    @AppStorage(WeeklyRing.key) var weeklyRing = 0
     @State private var custom: [Double] = WeekBudget.custom
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 10) {
                 SectionLabel(text: "Rings")
+                // Some plans (Enterprise, for one) have no weekly limit, so the ring would sit at 0%.
+                HStack(spacing: 8) {
+                    Image(systemName: "circle.circle")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Palette.claude)
+                        .frame(width: 16)
+                        .accessibilityHidden(true)
+                    Text("Weekly ring").font(.system(size: 12)).lineLimit(1)
+                    Spacer(minLength: 4)
+                    SegmentedChoice(title: "Weekly ring", selection: $weeklyRing,
+                                    options: [("Show", 0), ("Hide in small", 1), ("Hide", 2)])
+                        .frame(width: 224)
+                }
+                .help("Hide it if your plan has no weekly limit (it would always show 0%).")
                 SettingToggle(title: "Pace marker", isOn: $showPaceMarker) { PaceGlyph() }
                 SettingToggle(title: "Segmented rings", isOn: $segmentedRings) { SegmentGlyph() }
                 // Sub-option of Segmented rings: how the weekly ring's slices (and pace) are split.
@@ -326,7 +341,7 @@ struct RingsPanel: View {
                         if weeklySplit == 2 { customEditor }
                     }
                 }
-                .opacity(segmentedRings ? 1 : 0.5)
+                .opacity(segmentedRings && weeklyRing != 2 ? 1 : 0.5)
                 SettingToggle(title: "Model limit bar", isOn: $showScoped) { Image(systemName: "chart.bar.fill") }
 
                 SectionLabel(text: "Notes")

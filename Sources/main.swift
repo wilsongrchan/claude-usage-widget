@@ -971,6 +971,7 @@ struct WidgetView: View {
     @State private var stack: [Panel] = []
     @Namespace private var rings
     @AppStorage("showScoped") var showScoped = true
+    @AppStorage(WeeklyRing.key) var weeklyRing = 0
     @AppStorage("showPaceNote") var showPaceNote = true
     @AppStorage("showForecast") var showForecast = true
     @AppStorage(ResetTimes.key) var resetTimeStyle = 0   // read through resetText; here so a change redraws
@@ -1127,6 +1128,7 @@ struct WidgetView: View {
                 }
             }
             .frame(maxWidth: .infinity)
+            if WeeklyRing.shown(weeklyRing, small: false) {
             VStack(spacing: 5) {
                 RingGauge(percent: weekly, elapsed: wElapsed,
                           slices: segmentedRings ? (budget?.boundaries ?? uniformSlices(7)) : [0, 1],
@@ -1145,6 +1147,7 @@ struct WidgetView: View {
                 }
             }
             .frame(maxWidth: .infinity)
+            }
         }
 
         let scoped = showScoped ? (u.limits ?? []).filter { $0.kind == "weekly_scoped" } : []
@@ -1179,9 +1182,11 @@ struct WidgetView: View {
         let session = u.five_hour?.utilization ?? 0
         let weekly = u.seven_day?.utilization ?? 0
         let outer: CGFloat = 118, weeklyLine: CGFloat = 5, sessionLine: CGFloat = 11
+        let showWeekly = WeeklyRing.shown(weeklyRing, small: true)
 
         Spacer(minLength: 0)
         ZStack {
+            if showWeekly {
             RingGauge(percent: weekly, elapsed: wElapsed,
                       slices: segmentedRings ? (budget?.boundaries ?? uniformSlices(7)) : [0, 1],
                       current: budget?.current,
@@ -1190,9 +1195,11 @@ struct WidgetView: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Weekly usage")
                 .accessibilityValue(ringValue(weekly, reset: wReset, elapsed: wElapsed, session: false))
+            }
+            // Without the weekly ring, the session ring takes the full size.
             RingGauge(percent: session, elapsed: sElapsed, slices: segmentedRings ? uniformSlices(5) : [0, 1],
                       showMarker: showPaceMarker, showCenter: false,
-                      diameter: outer - 2 * (weeklyLine + 5), lineWidth: sessionLine,
+                      diameter: showWeekly ? outer - 2 * (weeklyLine + 5) : outer, lineWidth: sessionLine,
                       match: ("session", rings))
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Session usage")
@@ -1205,17 +1212,20 @@ struct WidgetView: View {
                         .font(.system(size: 11, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
-                Text("WK \(Int(weekly.rounded()))%")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .tracking(0.5)
-                    .foregroundStyle(usageColor(weekly))
+                if showWeekly {
+                    Text("WK \(Int(weekly.rounded()))%")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .tracking(0.5)
+                        .foregroundStyle(usageColor(weekly))
+                }
             }
             .monospacedDigit()
             .accessibilityHidden(true)   // the rings say it
         }
         .padding(.top, 6)   // sit the rings a touch lower in the small widget
         .frame(maxWidth: .infinity)
-        .help("Outer ring: weekly limit (7 days). Inner ring: 5-hour session. White ticks mark now.")
+        .help(showWeekly ? "Outer ring: weekly limit (7 days). Inner ring: 5-hour session. White ticks mark now."
+              : "5-hour session. The white tick marks now.")
         .overlay(alignment: .topTrailing) {
             if let p = store.problem {
                 // Something's wrong: a warning plus how old the numbers are.
@@ -1377,6 +1387,7 @@ struct WidgetView: View {
                             ? Forecast.hitTime(util: session, resetsAt: sReset, duration: 5 * 3600,
                                                now: store.now, useRecent: true) : nil)
                 .help("Each slice is one hour of the 5-hour session. The white tick marks now.")
+            if WeeklyRing.shown(weeklyRing, small: false) {
             Spacer(minLength: 6)
             mediumBlock(title: "Weekly", percent: weekly, elapsed: wElapsed, reset: wReset,
                         slices: segmentedRings ? (budget?.boundaries ?? uniformSlices(7)) : [0, 1],
@@ -1385,6 +1396,7 @@ struct WidgetView: View {
                             ? Forecast.hitTime(util: weekly, resetsAt: wReset, duration: 7 * 86400,
                                                now: store.now, useRecent: false) : nil)
                 .help("Each slice is one day's budget. The white tick marks where you should be by now.")
+            }
             Spacer(minLength: 0)
         }
         Spacer(minLength: 4)

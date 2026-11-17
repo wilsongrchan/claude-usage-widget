@@ -486,7 +486,8 @@ struct BarRow: View {
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .frame(width: 50, alignment: .trailing)
+                    .fixedSize()   // never truncate "Wed 18:59"; the bar gets shorter instead
+                    .frame(minWidth: 50, alignment: .trailing)
             }
         }
     }
@@ -1161,9 +1162,9 @@ struct WidgetView: View {
         }
         Spacer(minLength: 10)
         ResetChip(now: store.now, onTap: { open(.resets) }).frame(maxWidth: .infinity)
-        if let err = store.error {
+        if let p = store.problem {
             Spacer(minLength: 6)
-            errorLabel(err)
+            problemButton(p).font(.system(size: 11, weight: .medium)).frame(maxWidth: .infinity)
         }
     }
 
@@ -1229,7 +1230,11 @@ struct WidgetView: View {
                 .padding(.vertical, 2)
                 .background(Capsule().fill(Color.primary.opacity(0.07)))
                 .offset(x: 2, y: -4)
-                .help("\(p.short). \(p.long)")
+                .contentShape(Capsule())
+                .onTapGesture { open(.problem) }
+                .help("\(p.short). \(p.long) Click for help.")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel("\(p.short). How to fix")
             } else if let age = ageText(store.lastUpdated, now: store.now),
                store.notice != nil || store.now.timeIntervalSince(store.lastUpdated ?? store.now) > 150 {
                 Text(age)
@@ -1279,7 +1284,11 @@ struct WidgetView: View {
                 case .medium: mediumContent(u)
                 case .large: content(u)
                 }
-            } else if let err = store.error ?? store.notice {
+            } else if let p = store.problem {
+                Spacer()
+                problemButton(p).font(.system(size: 11, weight: .medium)).frame(maxWidth: .infinity)
+                Spacer()
+            } else if let err = store.notice {
                 Spacer()
                 errorLabel(err)
                 Spacer()
@@ -1325,9 +1334,7 @@ struct WidgetView: View {
                 let n = store.error == nil ? store.notice : nil
                 Group {
                     if let p = store.problem {
-                        Label(p.short, systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(dimmedNow ? AnyShapeStyle(Color.white.opacity(0.95)) : AnyShapeStyle(Palette.rust))
-                            .help(p.long)
+                        problemButton(p)
                     } else if n != nil {
                         Label("Updates paused", systemImage: "pause.circle")
                             .foregroundStyle(.secondary)
@@ -1468,6 +1475,8 @@ struct WidgetView: View {
             ResetPanel(now: store.now, nav: nav)
         case .about:
             AboutPanel(nav: nav)
+        case .problem:
+            ProblemPanel(store: store, nav: nav)
         }
     }
 
@@ -1494,6 +1503,22 @@ struct WidgetView: View {
     func compactReset(_ d: Date?) -> String {
         guard let d else { return "—" }
         return ResetTimes.short(d, now: store.now, clock: resetsAsClock, h24: uses24Hour)
+    }
+
+    /// "⚠ Login expired · 8h ago ›": opens the panel that says what to do.
+    func problemButton(_ p: UsageProblem) -> some View {
+        Button { open(.problem) } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                Text([p.short, ageText(store.lastUpdated, now: store.now)].compactMap { $0 }.joined(separator: " · "))
+                Image(systemName: "chevron.right").font(.system(size: 8, weight: .bold))
+            }
+            .foregroundStyle(dimmedNow ? AnyShapeStyle(Color.white.opacity(0.95)) : AnyShapeStyle(Palette.rust))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("\(p.long) Click for help.")
+        .accessibilityLabel("\(p.short). How to fix")
     }
 
     func errorLabel(_ err: String) -> some View {

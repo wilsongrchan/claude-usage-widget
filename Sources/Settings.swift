@@ -307,17 +307,19 @@ struct RingsPanel: View {
             VStack(alignment: .leading, spacing: 10) {
                 SectionLabel(text: "Rings")
                 // Some plans (Enterprise, for one) have no weekly limit, so the ring would sit at 0%.
-                HStack(spacing: 8) {
-                    Image(systemName: "circle.circle")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Palette.claude)
-                        .frame(width: 16)
-                        .accessibilityHidden(true)
-                    Text("Weekly ring").font(.system(size: 12)).lineLimit(1)
-                    Spacer(minLength: 4)
+                // Title above the choices: beside them, at the real panel width, the title truncated.
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "circle.circle")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Palette.claude)
+                            .frame(width: 16)
+                            .accessibilityHidden(true)
+                        Text("Weekly ring").font(.system(size: 12)).lineLimit(1)
+                    }
                     SegmentedChoice(title: "Weekly ring", selection: $weeklyRing,
                                     options: [("Show", 0), ("Hide in small", 1), ("Hide", 2)])
-                        .frame(width: 224)
+                        .padding(.leading, 24)
                 }
                 .help("Hide it if your plan has no weekly limit (it would always show 0%).")
                 SettingToggle(title: "Pace marker", isOn: $showPaceMarker) { PaceGlyph() }

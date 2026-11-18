@@ -1839,13 +1839,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     // MARK: Window layout
     //
-    // The window is always large-widget sized, and the glass sits inside it at the corner chosen in
-    // Resize direction. Changing size then only animates the glass: resizing a transparent window
-    // makes macOS redraw it from scratch, which flashes. Clicks on the empty, fully transparent
-    // part pass through on their own (macOS hit-tests transparent pixels; tested on macOS 26),
-    // so no mouse monitoring is needed.
-
-    static let windowSize = Grid.outer(.large)
+    // At rest the window is exactly the glass card: on some Macs macOS draws a faint box over a
+    // window's clear parts, so there are none. While the size changes, the window first grows
+    // (without redrawing) to cover both the old and new card, the glass animates inside it, and
+    // the window then shrinks back to the new card. Animating the window itself instead makes
+    // macOS redraw a transparent window from scratch on every frame, which flashes.
     private var anchorCache: (Bool, Bool)?
 
     /// Which corner stays put: (right edge, bottom edge).
@@ -1864,11 +1862,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         return NSScreen.screens.first { $0.frame.contains(c) } ?? window.screen ?? NSScreen.main ?? NSScreen.screens[0]
     }
 
-    func windowFrame(for w: NSRect) -> NSRect {
-        let S = Self.windowSize, a = anchors
-        return NSRect(x: a.right ? w.maxX - S.width : w.minX, y: a.bottom ? w.minY : w.maxY - S.height,
-                      width: S.width, height: S.height)
-    }
+    /// The window for a widget whose cells are `w`: exactly its glass card.
+    func windowFrame(for w: NSRect) -> NSRect { w.insetBy(dx: Grid.inset, dy: Grid.inset) }
 
     func glassFrame(for w: NSRect, in win: NSRect) -> NSRect {
         NSRect(x: w.minX - win.minX, y: w.minY - win.minY, width: w.width, height: w.height)
@@ -1933,21 +1928,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     var isExpanded: Bool { expandedFrom != nil }
 
-    /// Animate the glass to `target` (screen rect of its cells). If that needs a different window
-    /// position, the window jumps first (same size, no redraw) with the glass kept visually still.
+    /// Animate the glass to `target` (screen rect of its cells). The window first grows to cover
+    /// both cards, with the glass kept visually still, and fits the new card once it has arrived.
+    private var moveCount = 0
     func moveGlass(to target: NSRect, completion: (() -> Void)? = nil) {
+        moveCount += 1
+        let move = moveCount
         let w0 = widgetFrame
-        let win = windowFrame(for: target)
+        if Motion.reduced {
+            place(target)
+            completion?()
+            return
+        }
+        let win = windowFrame(for: w0).union(windowFrame(for: target))
         if win != window.frame {
             CATransaction.begin(); CATransaction.setDisableActions(true)
             window.setFrame(win, display: true)
             glass.frame = glassFrame(for: w0, in: win)
             CATransaction.commit()
-        }
-        if Motion.reduced {
-            glass.frame = glassFrame(for: target, in: win)
-            completion?()
-            return
         }
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = WidgetSize.duration
@@ -1955,7 +1953,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             ctx.timingFunction = CAMediaTimingFunction(controlPoints: Float(c.0), Float(c.1), Float(c.2), Float(c.3))
             ctx.allowsImplicitAnimation = true
             glass.animator().frame = glassFrame(for: target, in: win)
-        }, completionHandler: { completion?() })
+        }, completionHandler: { [weak self] in
+            // A newer move may have started meanwhile; only the latest one fits the window.
+            guard let self, self.moveCount == move else { return }
+            self.place(target)
+            completion?()
+        })
     }
 
     /// Put the widget at `w` (screen rect of its cells) immediately.
@@ -2019,13 +2022,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         hosting.autoresizingMask = [.width, .height]
 
         // Liquid Glass panel, inset inside its grid cells exactly like native widgets.
-        glass = NSGlassEffectView(frame: NSRect(origin: NSPoint(x: Grid.inset, y: Grid.inset), size: inner))
+        glass = NSGlassEffectView(frame: NSRect(origin: .zero, size: inner))
         glass.style = .regular
         glass.cornerRadius = Grid.cornerRadius
         glass.tintColor = Self.glassTint
         glass.contentView = hosting
 
-        let container = NSView(frame: NSRect(origin: .zero, size: Self.windowSize))
+        let container = NSView(frame: NSRect(origin: .zero, size: inner))
         container.addSubview(glass)
 
         window = WidgetWindow(contentRect: container.frame, styleMask: [.borderless],

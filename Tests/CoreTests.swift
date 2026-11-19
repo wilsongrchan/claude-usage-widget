@@ -204,6 +204,17 @@ func testResetTimes() {
     }
 }
 
+func testFeedback() {
+    suite("Feedback link") {
+        let u = feedbackURL(repo: "me/app", version: "0.2.2", os: "26.1.0", arch: "Apple Silicon")
+        expectEqual(u.host, "github.com")
+        expectEqual(u.path, "/me/app/issues/new")
+        let body = URLComponents(url: u, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "body" }?.value
+        expect(body?.hasSuffix("Claude Usage 0.2.2 · macOS 26.1.0 · Apple Silicon") == true, "versions filled in")
+        expect(!u.absoluteString.contains(" "), "spaces encoded")
+    }
+}
+
 func testWeeklyRing() {
     suite("Weekly ring: show, hide in small, hide") {
         expect(WeeklyRing.shown(0, small: true)); expect(WeeklyRing.shown(0, small: false))

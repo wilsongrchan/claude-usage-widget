@@ -9,6 +9,18 @@ enum AppInfo {
     static let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
     static let repo = "wilsongrchan/claude-usage-widget"
     static let releasesURL = URL(string: "https://github.com/\(repo)/releases/latest")!
+
+    /// Opens a new GitHub issue in the browser, with the versions filled in.
+    static func sendFeedback() {
+        let v = ProcessInfo.processInfo.operatingSystemVersion
+        #if arch(arm64)
+        let arch = "Apple Silicon"
+        #else
+        let arch = "Intel"
+        #endif
+        NSWorkspace.shared.open(feedbackURL(repo: repo, version: version,
+                                            os: "\(v.majorVersion).\(v.minorVersion).\(v.patchVersion)", arch: arch))
+    }
 }
 
 @MainActor
@@ -157,6 +169,14 @@ struct VersionSection: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 6) {
+                Text("Found a bug or have an idea?")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 4)
+                PillButton(title: "Send feedback") { AppInfo.sendFeedback() }
+            }
+            .padding(.top, 2)
         }
     }
 

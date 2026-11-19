@@ -1105,7 +1105,7 @@ struct AboutPanel: View {
                     section("Keychain access", icon: "key",
                             "macOS asks whether \u{201C}security\u{201D} may use \u{201C}Claude Code-credentials\u{201D}: that's how the app reads your Claude Code login. Always Allow stops macOS asking again, but it also lets other software on this Mac read that login through the same system tool. Allow asks again each time the app re-reads the login (at launch, and when Claude Code renews its login).")
                     section("What's stored locally", icon: "internaldrive",
-                            "Your settings, saved-reset count and expiry, and today's hourly usage are kept in this Mac's app preferences. Nothing leaves your Mac except that usage request to Anthropic and the daily update check with GitHub.")
+                            "Your settings, saved-reset count and expiry, and today's hourly usage are kept in this Mac's app preferences. Nothing leaves your Mac except that usage request to Anthropic and the daily update check with GitHub. Send feedback only opens a GitHub page in your browser, with the app and macOS versions filled in; nothing is sent unless you submit it.")
                     section("Accuracy", icon: "info.circle",
                             "Usage comes from an undocumented Anthropic endpoint that may change or stop working. Forecasts are estimates. Check Settings → Usage on claude.ai for the official figures.")
                     section("No warranty", icon: "doc.text",

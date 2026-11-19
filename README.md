@@ -69,6 +69,10 @@ Hover over the widget for its five buttons: refresh, the two other sizes, the **
   <img src="docs/images/settings-data.png" width="200" alt="Today by the hour">
 </p>
 
+## Feedback
+
+Found a bug or have an idea? [Open an issue](https://github.com/wilsongrchan/claude-usage-widget/issues/new), or choose **Send Feedback…** from the widget's right-click menu, its close button, or Settings → About. The app fills in its version and your macOS version for you.
+
 ## Privacy
 
 No account, no server, no tracking. It uses your Claude Code login **only** to ask Anthropic's own API for your usage, and everything stays on your Mac.

@@ -907,7 +907,7 @@ struct ControlBar: View {
     }
 }
 
-/// The widget's X: hide just the desktop widget (the menu bar gauge stays) or quit.
+/// The widget's X: hide just the desktop widget (the menu bar gauge stays), quit, or send feedback.
 @MainActor
 final class CloseMenu: NSObject {
     static let shared = CloseMenu()
@@ -920,14 +920,21 @@ final class CloseMenu: NSObject {
         let quit = NSMenuItem(title: "Quit Claude Usage", action: #selector(quit), keyEquivalent: "")
         quit.target = self
         quit.image = NSImage(systemSymbolName: "power", accessibilityDescription: nil)
+        let feedback = NSMenuItem(title: "Send Feedback…", action: #selector(sendFeedback), keyEquivalent: "")
+        feedback.target = self
+        feedback.image = NSImage(systemSymbolName: "bubble.left", accessibilityDescription: nil)
         menu.addItem(hide)
         menu.addItem(quit)
+        menu.addItem(.separator())
+        menu.addItem(feedback)
         menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
     }
 
     @objc private func hideWidget() { AppMenu.hideWidget() }   // keeps the menu bar gauge on
 
     @objc private func quit() { NSApp.terminate(nil) }
+
+    @objc private func sendFeedback() { AppInfo.sendFeedback() }
 }
 
 // MARK: - Shared widget state and commands

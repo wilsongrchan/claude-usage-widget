@@ -1815,6 +1815,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         MainActor.assumeIsolated { menuBar?.applyTheme() }
     }
     var glass: NSGlassEffectView!
+    /// Holds the glass and cuts everything off at its rounded corners. While the app is active,
+    /// the glass draws faintly past its rounded shape, which showed as a square frame on some Macs.
+    var card: NSView!
     var hosting: NSView!
     var size: WidgetSize { WidgetSize.current }
     let store = MainActor.assumeIsolated { UsageStore() }
@@ -1835,7 +1838,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     /// Screen rect of the widget's grid cells (the glass plus its 8pt inset).
     var widgetFrame: NSRect {
-        glass.frame.insetBy(dx: -Grid.inset, dy: -Grid.inset)
+        card.frame.insetBy(dx: -Grid.inset, dy: -Grid.inset)
             .offsetBy(dx: window.frame.minX, dy: window.frame.minY)
     }
 
@@ -1926,7 +1929,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if win != window.frame {
             CATransaction.begin(); CATransaction.setDisableActions(true)
             window.setFrame(win, display: true)
-            glass.frame = glassFrame(for: w0, in: win)
+            card.frame = glassFrame(for: w0, in: win)
             CATransaction.commit()
         }
         NSAnimationContext.runAnimationGroup({ ctx in
@@ -1934,7 +1937,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             let c = WidgetSize.curve
             ctx.timingFunction = CAMediaTimingFunction(controlPoints: Float(c.0), Float(c.1), Float(c.2), Float(c.3))
             ctx.allowsImplicitAnimation = true
-            glass.animator().frame = glassFrame(for: target, in: win)
+            card.animator().frame = glassFrame(for: target, in: win)
         }, completionHandler: { [weak self] in
             // A newer move may have started meanwhile; only the latest one fits the window.
             guard let self, self.moveCount == move else { return }
@@ -1948,7 +1951,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let win = windowFrame(for: w)
         CATransaction.begin(); CATransaction.setDisableActions(true)
         window.setFrame(win, display: false)
-        glass.frame = glassFrame(for: w, in: win)
+        card.frame = glassFrame(for: w, in: win)
         CATransaction.commit()
     }
 
@@ -2004,14 +2007,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         hosting.autoresizingMask = [.width, .height]
 
         // Liquid Glass panel, inset inside its grid cells exactly like native widgets.
-        glass = NSGlassEffectView(frame: NSRect(origin: .zero, size: inner))
+        card = NSView(frame: NSRect(origin: .zero, size: inner))
+        card.wantsLayer = true
+        card.layer?.cornerRadius = Grid.cornerRadius
+        card.layer?.cornerCurve = .continuous
+        card.layer?.masksToBounds = true
+        glass = NSGlassEffectView(frame: card.bounds)
+        glass.autoresizingMask = [.width, .height]
         glass.style = .regular
         glass.cornerRadius = Grid.cornerRadius
         glass.tintColor = Self.glassTint
         glass.contentView = hosting
 
         let container = NSView(frame: NSRect(origin: .zero, size: inner))
-        container.addSubview(glass)
+        card.addSubview(glass)
+        container.addSubview(card)
 
         window = WidgetWindow(contentRect: container.frame, styleMask: [.borderless],
                               backing: .buffered, defer: false)

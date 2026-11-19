@@ -1842,7 +1842,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     // part pass through on their own (macOS hit-tests transparent pixels; tested on macOS 26),
     // so no mouse monitoring is needed.
 
-    static let windowSize = Grid.outer(.large)
+    /// Clear space around the large widget's cells. The glass casts a soft shadow, stronger
+    /// while pressed; with only the 8pt cell inset around it, the window's edge cut the shadow
+    /// off in a straight line, which showed as a faint frame. With room, it fades out.
+    static let shadowRoom: CGFloat = 32
+    static let windowSize = NSSize(width: Grid.outer(.large).width + 2 * shadowRoom,
+                                   height: Grid.outer(.large).height + 2 * shadowRoom)
     private var anchorCache: (Bool, Bool)?
 
     /// Which corner stays put: (right edge, bottom edge).
@@ -1862,9 +1867,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     func windowFrame(for w: NSRect) -> NSRect {
-        let S = Self.windowSize, a = anchors
-        return NSRect(x: a.right ? w.maxX - S.width : w.minX, y: a.bottom ? w.minY : w.maxY - S.height,
-                      width: S.width, height: S.height)
+        let L = Grid.outer(.large), r = Self.shadowRoom, a = anchors
+        return NSRect(x: (a.right ? w.maxX - L.width : w.minX) - r, y: (a.bottom ? w.minY : w.maxY - L.height) - r,
+                      width: Self.windowSize.width, height: Self.windowSize.height)
     }
 
     func glassFrame(for w: NSRect, in win: NSRect) -> NSRect {
@@ -2028,7 +2033,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         hosting.autoresizingMask = [.width, .height]
 
         // Liquid Glass panel, inset inside its grid cells exactly like native widgets.
-        glass = NSGlassEffectView(frame: NSRect(origin: NSPoint(x: Grid.inset, y: Grid.inset), size: inner))
+        glass = NSGlassEffectView(frame: NSRect(origin: NSPoint(x: Grid.inset + Self.shadowRoom,
+                                                                y: Grid.inset + Self.shadowRoom), size: inner))
         glass.style = .regular
         glass.cornerRadius = Grid.cornerRadius
         glass.tintColor = Self.glassTint

@@ -159,6 +159,27 @@ func bestSlot(near p: (x: Double, y: Double), xs: [Double], ys: [Double], w: Dou
     return best?.slot
 }
 
+/// Where a w×h widget snaps on a screen whose visible area is `v` (AppKit coordinates),
+/// starting from `p`. Candidates: the grid from each screen edge, `margin` in, and the grid each
+/// native widget sits on. Native widgets aren't always `margin` from the edge (8pt on a 16-inch
+/// MacBook Pro, 16pt on a 13-inch MacBook Air), so their grids reach right up to the visible edge.
+func snapSlot(near p: (x: Double, y: Double), w: Double, h: Double, visible v: Slot,
+              taken: [Slot], margin: Double, pitch: Double) -> Slot? {
+    let lo = (x: v.x + margin, y: v.y + margin), hi = (x: v.x + v.w - margin, y: v.y + v.h - margin)
+    func xs(_ refs: [Double], _ lo: Double, _ hi: Double) -> Set<Double> {
+        Set(refs.flatMap { gridLattice($0, len: w, lo: lo, hi: hi, pitch: pitch) }.map { $0.rounded() })
+    }
+    func ys(_ tops: [Double], _ lo: Double, _ hi: Double) -> Set<Double> {
+        Set(tops.flatMap { gridLattice($0 - h, len: h, lo: lo, hi: hi, pitch: pitch) }.map { $0.rounded() })
+    }
+    // Reference left edges and top edges (a top edge is a maxY): the screen's, then each native widget's.
+    let edgeXs = xs([lo.x, hi.x - w], lo.x, hi.x), edgeYs = ys([hi.y, lo.y + h], lo.y, hi.y)
+    let alignedXs = xs(taken.map { $0.x }, v.x, v.x + v.w)
+    let alignedYs = ys(taken.map { $0.y + $0.h }, v.y, v.y + v.h)
+    return bestSlot(near: p, xs: Array(edgeXs.union(alignedXs)), ys: Array(edgeYs.union(alignedYs)),
+                    w: w, h: h, taken: taken, alignedXs: alignedXs, alignedYs: alignedYs, pitch: pitch)
+}
+
 // MARK: - Notifications already sent
 
 /// Which alerts and reminders have already gone out, so each fires once. One dictionary

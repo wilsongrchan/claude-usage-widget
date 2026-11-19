@@ -1708,10 +1708,6 @@ enum Grid {
         DispatchQueue.main.async { done() }
     }
 
-    private static func lattice(_ ref: CGFloat, len: CGFloat, lo: CGFloat, hi: CGFloat) -> [CGFloat] {
-        gridLattice(ref, len: len, lo: lo, hi: hi, pitch: pitch).map { CGFloat($0) }
-    }
-
     /// Nearest free slot for this widget size to `frame`'s origin on the given screen.
     /// Native widgets snap to whichever screen edge they're near (16pt in) and to each other,
     /// not to one grid from the top-left, so the slots follow every edge and every native group.
@@ -1719,24 +1715,10 @@ enum Grid {
         let v = screen.visibleFrame
         let o = outer(s)
         let taken = nativeWidgetRects().filter { $0.intersects(v) }
-        let lo = (x: v.minX + margin, y: v.minY + margin), hi = (x: v.maxX - margin, y: v.maxY - margin)
-
-        // Reference left edges and top edges (AppKit y, so a top edge is a maxY): the screen's
-        // edges, and the grid each native widget sits on.
-        let edgeX: [CGFloat] = [lo.x, hi.x - o.width], edgeTop: [CGFloat] = [hi.y, lo.y + o.height]
-        let groupX = taken.map { $0.minX }, groupTop = taken.map { $0.maxY }   // every native widget's own grid
-        func xsFrom(_ refs: [CGFloat]) -> Set<Double> {
-            Set(refs.flatMap { gridLattice(Double($0), len: Double(o.width), lo: Double(lo.x), hi: Double(hi.x), pitch: Double(pitch)) }.map { $0.rounded() })
-        }
-        func ysFrom(_ tops: [CGFloat]) -> Set<Double> {
-            Set(tops.flatMap { gridLattice(Double($0 - o.height), len: Double(o.height), lo: Double(lo.y), hi: Double(hi.y), pitch: Double(pitch)) }.map { $0.rounded() })
-        }
-        let alignedXs = xsFrom(groupX), alignedYs = ysFrom(groupTop)
-        let xs = xsFrom(edgeX).union(alignedXs), ys = ysFrom(edgeTop).union(alignedYs)
-        let slot = bestSlot(near: (Double(frame.minX), Double(frame.minY)), xs: Array(xs), ys: Array(ys),
-                            w: Double(o.width), h: Double(o.height),
+        let slot = snapSlot(near: (Double(frame.minX), Double(frame.minY)), w: Double(o.width), h: Double(o.height),
+                            visible: Slot(x: v.minX, y: v.minY, w: v.width, h: v.height),
                             taken: taken.map { Slot(x: $0.minX, y: $0.minY, w: $0.width, h: $0.height) },
-                            alignedXs: alignedXs, alignedYs: alignedYs, pitch: Double(pitch))
+                            margin: Double(margin), pitch: Double(pitch))
         return slot.map { NSRect(x: $0.x, y: $0.y, width: $0.w, height: $0.h) } ?? frame
     }
 }

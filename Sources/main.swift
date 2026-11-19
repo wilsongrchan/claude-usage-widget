@@ -25,9 +25,10 @@ final class UsageStore: ObservableObject {
     /// Long form, for the large widget and popover.
     var error: String? { problem.map { "\($0.short). \($0.long)" } }
 
-    // Polling: every minute normally, every 5 minutes while the display sleeps or the screen is
+    // Polling: every 2 minutes normally, every 5 minutes while the display sleeps or the screen is
     // locked (Claude Code can still be working, and alerts still matter), longer when rate limited.
-    private static let activeInterval: TimeInterval = 60
+    // Every minute got rate limited, e.g. with the app on two Macs for the same account.
+    private static let activeInterval: TimeInterval = 120
     private static let idleInterval: TimeInterval = 300
     private var idleReasons: Set<String> = []
     private var backoff: TimeInterval?
@@ -75,7 +76,15 @@ final class UsageStore: ObservableObject {
             usage = cached
             lastUpdated = d.object(forKey: "lastUsageDate") as? Date
         }
-        if !isFresh { Task { await refresh() } }
+        // Still inside a rate-limit wait from before a relaunch: keep waiting rather than asking
+        // again at once (that just gets turned away and can make the wait longer).
+        if let until = d.object(forKey: Self.pausedUntilKey) as? Date, until > Date() {
+            pausedReason = "Updates paused"
+            nextRetry = until
+            backoff = max(until.timeIntervalSinceNow, 60)
+        } else if !isFresh {
+            Task { await refresh() }
+        }
         schedulePoll()
 
         let ws = NSWorkspace.shared.notificationCenter
@@ -110,7 +119,9 @@ final class UsageStore: ObservableObject {
         }
     }
 
-    private var isFresh: Bool { lastUpdated.map { Date().timeIntervalSince($0) < 50 } ?? false }
+    private static let pausedUntilKey = "rateLimitedUntil"
+
+    private var isFresh: Bool { lastUpdated.map { Date().timeIntervalSince($0) < 100 } ?? false }
 
     private func setIdle(_ reason: String, _ on: Bool) {
         let wasIdle = !idleReasons.isEmpty
@@ -164,6 +175,7 @@ final class UsageStore: ObservableObject {
             backoff = min(max(r.retryAfter.map { min($0, 3600) } ?? pollInterval * 2, 60),
                           r.retryAfter == nil ? 600 : 3600)
             nextRetry = Date().addingTimeInterval(pollInterval)
+            UserDefaults.standard.set(nextRetry, forKey: Self.pausedUntilKey)
             schedulePoll()
         } catch is URLError {
             problem = nil
@@ -193,6 +205,7 @@ final class UsageStore: ObservableObject {
         HourlyLog.record(u, now: Date())
         DayStartLog.record(weeklyUtil: u.seven_day?.utilization ?? 0, resetsAt: parseDate(u.seven_day?.resets_at), now: Date())
         LimitAlerts.check(u, now: Date())
+        UserDefaults.standard.removeObject(forKey: Self.pausedUntilKey)
         if backoff != nil { backoff = nil; schedulePoll() }
     }
 
@@ -1255,8 +1268,12 @@ struct WidgetView: View {
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel("\(p.short). How to fix")
             } else if let age = ageText(store.lastUpdated, now: store.now),
-               store.notice != nil || store.now.timeIntervalSince(store.lastUpdated ?? store.now) > 150 {
-                Text(age)
+               store.notice != nil || store.now.timeIntervalSince(store.lastUpdated ?? store.now) > 300 {
+                // Paused (rate limited or offline): say so, or the widget just looks stuck.
+                HStack(spacing: 2) {
+                    if store.notice != nil { Image(systemName: "pause.fill").font(.system(size: 7, weight: .bold)) }
+                    Text(age)
+                }
                     .font(.system(size: 10, weight: .semibold))
                     .monospacedDigit()
                     .foregroundStyle(.secondary)

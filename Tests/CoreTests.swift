@@ -160,6 +160,9 @@ func testSnapping() {
                       Slot(x: 188, y: 536, w: 180, h: 180)]
         let s = snapSlot(near: (368, 888), w: 360, h: 180, visible: visible, taken: native, margin: 16, pitch: 180)
         expectEqual(s, Slot(x: 368, y: 896, w: 360, h: 180), "joins the native top row")
+        // Below the native column: it was 8pt right and 8pt too low (on the 16pt edge grid).
+        let below = snapSlot(near: (16, 348), w: 360, h: 180, visible: visible, taken: native, margin: 16, pitch: 180)
+        expectEqual(below, Slot(x: 8, y: 356, w: 360, h: 180), "flush under the native column")
         // Away from native widgets, the right edge is still 16pt in; the top follows the native row.
         let alone = snapSlot(near: (1350, 900), w: 360, h: 180, visible: visible, taken: native, margin: 16, pitch: 180)
         expectEqual(alone, Slot(x: 1352, y: 896, w: 360, h: 180), "top-right: 16pt from the right, native row height")

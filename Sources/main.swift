@@ -1188,7 +1188,7 @@ struct WidgetView: View {
         let wElapsed = budget?.expected
         let session = u.five_hour?.utilization ?? 0
         let weekly = u.seven_day?.utilization ?? 0
-        let outer: CGFloat = 118, weeklyLine: CGFloat = 5, sessionLine: CGFloat = 11
+        let outer: CGFloat = 108, weeklyLine: CGFloat = 5, sessionLine: CGFloat = 11   // 118 nearly touched the corner labels
         let showWeekly = WeeklyRing.shown(weeklyRing, small: true)
 
         Spacer(minLength: 0)
@@ -1203,10 +1203,12 @@ struct WidgetView: View {
                 .accessibilityLabel("Weekly usage")
                 .accessibilityValue(ringValue(weekly, reset: wReset, elapsed: wElapsed, session: false))
             }
-            // Without the weekly ring, the session ring takes the full size.
+            // Without the weekly ring, the session ring is a little bigger and bolder, but stays
+            // clear of the corner labels (at full size it nearly touched them).
             RingGauge(percent: session, elapsed: sElapsed, slices: segmentedRings ? uniformSlices(5) : [0, 1],
                       showMarker: showPaceMarker, showCenter: false,
-                      diameter: showWeekly ? outer - 2 * (weeklyLine + 5) : outer, lineWidth: sessionLine,
+                      diameter: showWeekly ? outer - 2 * (weeklyLine + 5) : 100,
+                      lineWidth: showWeekly ? sessionLine : 15,
                       match: ("session", rings))
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Session usage")
@@ -1732,7 +1734,11 @@ enum Grid {
 
 // MARK: - Window / app
 
-final class WidgetWindow: NSWindow {
+/// A non-activating panel, like native widgets: clicking, dragging or using its buttons leaves
+/// the frontmost app alone. While the app was active the glass drew faintly past its rounded
+/// corners, which showed as a square frame on some Macs. It takes keyboard focus only while a
+/// settings panel is open (the saved-reset date field needs typing).
+final class WidgetWindow: NSPanel {
     var onDragEnd: (() -> Void)?
     /// The right-click / Control-click menu, built fresh each time so it shows the current state.
     var contextMenu: (() -> NSMenu)?
@@ -1742,7 +1748,9 @@ final class WidgetWindow: NSWindow {
     private var originStart: NSPoint = .zero
     private var dragged = false
 
-    override var canBecomeKey: Bool { true }
+    /// Set while settings (or another panel) is open.
+    var takesKeyboard = false
+    override var canBecomeKey: Bool { takesKeyboard }
 
     // Manual dragging so we know exactly when the drag ends and can snap to the grid.
     override func sendEvent(_ e: NSEvent) {
@@ -1822,20 +1830,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         MainActor.assumeIsolated { menuBar?.applyTheme() }
     }
     var glass: NSGlassEffectView!
-    /// Holds the glass and cuts everything off at its rounded corners. While the app is active,
-    /// the glass draws faintly past its rounded shape, which showed as a square frame on some Macs.
-    var card: NSView!
     var hosting: NSView!
     var size: WidgetSize { WidgetSize.current }
     let store = MainActor.assumeIsolated { UsageStore() }
 
     // MARK: Window layout
     //
-    // At rest the window is exactly the glass card: on some Macs macOS draws a faint box over a
-    // window's clear parts, so there are none. While the size changes, the window first grows
-    // (without redrawing) to cover both the old and new card, the glass animates inside it, and
-    // the window then shrinks back to the new card. Animating the window itself instead makes
-    // macOS redraw a transparent window from scratch on every frame, which flashes.
+    // The window is always large-widget sized, and the glass sits inside it at the corner chosen in
+    // Resize direction. Changing size then only animates the glass: resizing a transparent window
+    // makes macOS redraw it from scratch, which flashes. Clicks on the empty, fully transparent
+    // part pass through on their own (macOS hit-tests transparent pixels; tested on macOS 26),
+    // so no mouse monitoring is needed.
+
+    /// Clear space around the large widget's cells. The glass casts a soft shadow, stronger
+    /// while pressed; with only the 8pt cell inset around it, the window's edge cut the shadow
+    /// off in a straight line, which showed as a faint frame. With room, it fades out.
+    static let shadowRoom: CGFloat = 32
+    static let windowSize = NSSize(width: Grid.outer(.large).width + 2 * shadowRoom,
+                                   height: Grid.outer(.large).height + 2 * shadowRoom)
     private var anchorCache: (Bool, Bool)?
 
     /// Which corner stays put: (right edge, bottom edge).
@@ -1845,7 +1857,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     /// Screen rect of the widget's grid cells (the glass plus its 8pt inset).
     var widgetFrame: NSRect {
-        card.frame.insetBy(dx: -Grid.inset, dy: -Grid.inset)
+        glass.frame.insetBy(dx: -Grid.inset, dy: -Grid.inset)
             .offsetBy(dx: window.frame.minX, dy: window.frame.minY)
     }
 
@@ -1854,8 +1866,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         return NSScreen.screens.first { $0.frame.contains(c) } ?? window.screen ?? NSScreen.main ?? NSScreen.screens[0]
     }
 
-    /// The window for a widget whose cells are `w`: exactly its glass card.
-    func windowFrame(for w: NSRect) -> NSRect { w.insetBy(dx: Grid.inset, dy: Grid.inset) }
+    func windowFrame(for w: NSRect) -> NSRect {
+        let L = Grid.outer(.large), r = Self.shadowRoom, a = anchors
+        return NSRect(x: (a.right ? w.maxX - L.width : w.minX) - r, y: (a.bottom ? w.minY : w.maxY - L.height) - r,
+                      width: Self.windowSize.width, height: Self.windowSize.height)
+    }
 
     func glassFrame(for w: NSRect, in win: NSRect) -> NSRect {
         NSRect(x: w.minX - win.minX, y: w.minY - win.minY, width: w.width, height: w.height)
@@ -1890,6 +1905,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             window.draggable = false
             if window.level.rawValue < Self.settingsLevel.rawValue { window.level = Self.settingsLevel }
             window.orderFrontRegardless()
+            window.takesKeyboard = true   // the saved-reset date field needs typing
+            window.makeKey()
             WidgetSize.noteChange(from: size.rawValue, to: WidgetSize.large.rawValue)
             MainActor.assumeIsolated { withAnimation(WidgetSize.changeAnimation) { state.expanded = true } }
             moveGlass(to: target)
@@ -1910,6 +1927,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             WidgetSize.noteChange(from: WidgetSize.large.rawValue, to: size.rawValue)
             MainActor.assumeIsolated { withAnimation(WidgetSize.changeAnimation) { state.expanded = false } }
             window.draggable = true
+            releaseKeyboard()
             moveGlass(to: target) { [weak self] in
                 guard let self else { return }
                 self.applyLevel(UserDefaults.standard.bool(forKey: "floatOnTop"))
@@ -1920,37 +1938,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     var isExpanded: Bool { expandedFrom != nil }
 
-    /// Animate the glass to `target` (screen rect of its cells). The window first grows to cover
-    /// both cards, with the glass kept visually still, and fits the new card once it has arrived.
-    private var moveCount = 0
+    /// Panels closed: back to a widget that clicks never activate. If settings had made the app
+    /// active, hand focus back to whatever was in front before.
+    func releaseKeyboard() {
+        let wasKey = window.isKeyWindow
+        window.takesKeyboard = false
+        if wasKey && NSApp.isActive { NSApp.deactivate() }
+    }
+
+    /// Animate the glass to `target` (screen rect of its cells). If that needs a different window
+    /// position, the window jumps first (same size, no redraw) with the glass kept visually still.
     func moveGlass(to target: NSRect, completion: (() -> Void)? = nil) {
-        moveCount += 1
-        let move = moveCount
         let w0 = widgetFrame
-        if Motion.reduced {
-            place(target)
-            completion?()
-            return
-        }
-        let win = windowFrame(for: w0).union(windowFrame(for: target))
+        let win = windowFrame(for: target)
         if win != window.frame {
             CATransaction.begin(); CATransaction.setDisableActions(true)
             window.setFrame(win, display: true)
-            card.frame = glassFrame(for: w0, in: win)
+            glass.frame = glassFrame(for: w0, in: win)
             CATransaction.commit()
+        }
+        if Motion.reduced {
+            glass.frame = glassFrame(for: target, in: win)
+            completion?()
+            return
         }
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = WidgetSize.duration
             let c = WidgetSize.curve
             ctx.timingFunction = CAMediaTimingFunction(controlPoints: Float(c.0), Float(c.1), Float(c.2), Float(c.3))
             ctx.allowsImplicitAnimation = true
-            card.animator().frame = glassFrame(for: target, in: win)
-        }, completionHandler: { [weak self] in
-            // A newer move may have started meanwhile; only the latest one fits the window.
-            guard let self, self.moveCount == move else { return }
-            self.place(target)
-            completion?()
-        })
+            glass.animator().frame = glassFrame(for: target, in: win)
+        }, completionHandler: { completion?() })
     }
 
     /// Put the widget at `w` (screen rect of its cells) immediately.
@@ -1958,7 +1976,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let win = windowFrame(for: w)
         CATransaction.begin(); CATransaction.setDisableActions(true)
         window.setFrame(win, display: false)
-        card.frame = glassFrame(for: w, in: win)
+        glass.frame = glassFrame(for: w, in: win)
         CATransaction.commit()
     }
 
@@ -1979,6 +1997,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 MainActor.assumeIsolated { WidgetState.shared.expanded = false; WidgetCommand.closePanels.send() }
                 place(from.frame)
                 window.draggable = true
+                releaseKeyboard()
                 applyLevel(d.bool(forKey: "floatOnTop"))
             }
             window.orderOut(nil)
@@ -2014,24 +2033,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         hosting.autoresizingMask = [.width, .height]
 
         // Liquid Glass panel, inset inside its grid cells exactly like native widgets.
-        card = NSView(frame: NSRect(origin: .zero, size: inner))
-        card.wantsLayer = true
-        card.layer?.cornerRadius = Grid.cornerRadius
-        card.layer?.cornerCurve = .continuous
-        card.layer?.masksToBounds = true
-        glass = NSGlassEffectView(frame: card.bounds)
-        glass.autoresizingMask = [.width, .height]
+        glass = NSGlassEffectView(frame: NSRect(origin: NSPoint(x: Grid.inset + Self.shadowRoom,
+                                                                y: Grid.inset + Self.shadowRoom), size: inner))
         glass.style = .regular
         glass.cornerRadius = Grid.cornerRadius
         glass.tintColor = Self.glassTint
         glass.contentView = hosting
 
-        let container = NSView(frame: NSRect(origin: .zero, size: inner))
-        card.addSubview(glass)
-        container.addSubview(card)
+        let container = NSView(frame: NSRect(origin: .zero, size: Self.windowSize))
+        container.addSubview(glass)
 
-        window = WidgetWindow(contentRect: container.frame, styleMask: [.borderless],
+        window = WidgetWindow(contentRect: container.frame, styleMask: [.borderless, .nonactivatingPanel],
                               backing: .buffered, defer: false)
+        window.hidesOnDeactivate = false   // panels hide when the app deactivates by default
+        window.isFloatingPanel = false
         window.contentView = container
         window.contextMenu = { [weak self] in AppMenu.contextMenu(store: self?.store, forMenuBar: false) }
         window.isOpaque = false

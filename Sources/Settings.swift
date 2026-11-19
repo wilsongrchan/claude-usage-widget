@@ -156,6 +156,8 @@ struct SegmentedChoice<Value: Hashable>: View {
     let title: String
     @Binding var selection: Value
     let options: [(String, Value)]
+    /// Each option as wide as its words, instead of equal slots filling the row.
+    var fit = false
 
     var body: some View {
         Group {
@@ -166,9 +168,13 @@ struct SegmentedChoice<Value: Hashable>: View {
                         Text(o.0)
                             .font(.system(size: 11, weight: selected ? .semibold : .regular))
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                            // Sized to their words: keep the bold width, so picking one doesn't shift the row.
+                            .background(fit ? Text(o.0).font(.system(size: 11, weight: .semibold)).hidden() : nil)
+                            .minimumScaleFactor(fit ? 1 : 0.8)
                             .foregroundStyle(selected ? Palette.claudeText : Color.primary.opacity(0.75))
-                            .frame(maxWidth: .infinity)
+                            .fixedSize(horizontal: fit, vertical: false)
+                            .padding(.horizontal, fit ? 7 : 0)
+                            .frame(maxWidth: fit ? nil : .infinity)
                             .frame(height: 20)
                             .background(RoundedRectangle(cornerRadius: 5, style: .continuous)
                                 .fill(selected ? Palette.claude.opacity(0.18) : Color.clear))
@@ -307,19 +313,17 @@ struct RingsPanel: View {
             VStack(alignment: .leading, spacing: 10) {
                 SectionLabel(text: "Rings")
                 // Some plans (Enterprise, for one) have no weekly limit, so the ring would sit at 0%.
-                // Title above the choices: beside them, at the real panel width, the title truncated.
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "circle.circle")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Palette.claude)
-                            .frame(width: 16)
-                            .accessibilityHidden(true)
-                        Text("Weekly ring").font(.system(size: 12)).lineLimit(1)
-                    }
+                // Choices sized to their words (not equal slots), so they fit beside the title.
+                HStack(spacing: 8) {
+                    Image(systemName: "circle.circle")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Palette.claude)
+                        .frame(width: 16)
+                        .accessibilityHidden(true)
+                    Text("Weekly ring").font(.system(size: 12)).lineLimit(1).fixedSize()
+                    Spacer(minLength: 4)
                     SegmentedChoice(title: "Weekly ring", selection: $weeklyRing,
-                                    options: [("Show", 0), ("Hide in small", 1), ("Hide", 2)])
-                        .padding(.leading, 24)
+                                    options: [("Show", 0), ("Hide in small", 1), ("Hide", 2)], fit: true)
                 }
                 .help("Hide it if your plan has no weekly limit (it would always show 0%).")
                 SettingToggle(title: "Pace marker", isOn: $showPaceMarker) { PaceGlyph() }

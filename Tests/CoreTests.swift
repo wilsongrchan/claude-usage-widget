@@ -151,6 +151,28 @@ func testSnapping() {
                                taken: native, alignedXs: [8], alignedYs: [820, 640], pitch: 180)
         expectEqual(covered?.y, 640, "never on top of a native widget")
     }
+    suite("snapSlot: native widgets 8pt from the edge (16-inch MacBook Pro)") {
+        // The owner's second Mac: 1728×1117 screen, 33pt menu bar, Dock 67pt; native widgets
+        // 8pt in, a medium one at the top-left. Ours (medium) was left 8pt below that row.
+        let visible = Slot(x: 0, y: 67, w: 1728, h: 1017)
+        let native = [Slot(x: 8, y: 896, w: 360, h: 180), Slot(x: 8, y: 716, w: 180, h: 180),
+                      Slot(x: 188, y: 716, w: 180, h: 180), Slot(x: 8, y: 536, w: 180, h: 180),
+                      Slot(x: 188, y: 536, w: 180, h: 180)]
+        let s = snapSlot(near: (368, 888), w: 360, h: 180, visible: visible, taken: native, margin: 16, pitch: 180)
+        expectEqual(s, Slot(x: 368, y: 896, w: 360, h: 180), "joins the native top row")
+        // Below the native column: it was 8pt right and 8pt too low (on the 16pt edge grid).
+        let below = snapSlot(near: (16, 348), w: 360, h: 180, visible: visible, taken: native, margin: 16, pitch: 180)
+        expectEqual(below, Slot(x: 8, y: 356, w: 360, h: 180), "flush under the native column")
+        // Away from native widgets, the right edge is still 16pt in; the top follows the native row.
+        let alone = snapSlot(near: (1350, 900), w: 360, h: 180, visible: visible, taken: native, margin: 16, pitch: 180)
+        expectEqual(alone, Slot(x: 1352, y: 896, w: 360, h: 180), "top-right: 16pt from the right, native row height")
+    }
+    suite("snapSlot: native widgets 16pt from the edge (13-inch MacBook Air)") {
+        let visible = Slot(x: 0, y: 0, w: 1440, h: 870)
+        let native = [Slot(x: 16, y: 674, w: 360, h: 180)]
+        let s = snapSlot(near: (380, 670), w: 360, h: 180, visible: visible, taken: native, margin: 16, pitch: 180)
+        expectEqual(s, Slot(x: 376, y: 674, w: 360, h: 180), "next to it, same row")
+    }
 }
 
 func testResetTimes() {

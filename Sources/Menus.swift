@@ -22,7 +22,7 @@ final class ActionMenuItem: NSMenuItem {
 
 @MainActor
 enum AppMenu {
-    /// Refresh · Small / Medium / Large · Settings… · Hide (or Show) Widget · Quit.
+    /// Refresh · Small / Medium / Large · Settings… · Hide (or Show) Widget · Send Feedback… · Quit.
     /// From the menu bar item, Settings… opens in the popover (the menu bar's own panel).
     static func contextMenu(store: UsageStore?, forMenuBar: Bool) -> NSMenu {
         let menu = NSMenu()
@@ -59,6 +59,7 @@ enum AppMenu {
             menu.addItem(ActionMenuItem("Hide Widget", image: "menubar.rectangle") { hideWidget() })
         }
         menu.addItem(.separator())
+        menu.addItem(ActionMenuItem("Send Feedback…", image: "bubble.left") { AppInfo.sendFeedback() })
         menu.addItem(ActionMenuItem("Quit Claude Usage", key: "q") { NSApp.terminate(nil) })
         return menu
     }

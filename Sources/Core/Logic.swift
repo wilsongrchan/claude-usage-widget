@@ -180,6 +180,17 @@ func snapSlot(near p: (x: Double, y: Double), w: Double, h: Double, visible v: S
                     w: w, h: h, taken: taken, alignedXs: alignedXs, alignedYs: alignedYs, pitch: pitch)
 }
 
+// MARK: - Feedback
+
+/// A new GitHub issue with the app version, macOS version and chip already filled in.
+/// Nothing is sent: it only opens the page, and the person reads it before submitting.
+func feedbackURL(repo: String, version: String, os: String, arch: String) -> URL {
+    let body = "**What happened, or what would you like?**\n\n\n\n---\nClaude Usage \(version) · macOS \(os) · \(arch)"
+    var c = URLComponents(string: "https://github.com/\(repo)/issues/new")!
+    c.queryItems = [URLQueryItem(name: "body", value: body)]
+    return c.url!
+}
+
 // MARK: - Notifications already sent
 
 /// Which alerts and reminders have already gone out, so each fires once. One dictionary

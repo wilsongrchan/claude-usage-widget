@@ -1188,7 +1188,7 @@ struct WidgetView: View {
         let wElapsed = budget?.expected
         let session = u.five_hour?.utilization ?? 0
         let weekly = u.seven_day?.utilization ?? 0
-        let outer: CGFloat = 118, weeklyLine: CGFloat = 5, sessionLine: CGFloat = 11
+        let outer: CGFloat = 108, weeklyLine: CGFloat = 5, sessionLine: CGFloat = 11   // 118 nearly touched the corner labels
         let showWeekly = WeeklyRing.shown(weeklyRing, small: true)
 
         Spacer(minLength: 0)
@@ -1203,10 +1203,12 @@ struct WidgetView: View {
                 .accessibilityLabel("Weekly usage")
                 .accessibilityValue(ringValue(weekly, reset: wReset, elapsed: wElapsed, session: false))
             }
-            // Without the weekly ring, the session ring takes the full size.
+            // Without the weekly ring, the session ring is a little bigger and bolder, but stays
+            // clear of the corner labels (at full size it nearly touched them).
             RingGauge(percent: session, elapsed: sElapsed, slices: segmentedRings ? uniformSlices(5) : [0, 1],
                       showMarker: showPaceMarker, showCenter: false,
-                      diameter: showWeekly ? outer - 2 * (weeklyLine + 5) : outer, lineWidth: sessionLine,
+                      diameter: showWeekly ? outer - 2 * (weeklyLine + 5) : 100,
+                      lineWidth: showWeekly ? sessionLine : 15,
                       match: ("session", rings))
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Session usage")
